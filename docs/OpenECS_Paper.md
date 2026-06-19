@@ -8,7 +8,7 @@ tags:
   - Rust
 authors:
   - name: Brian Lam
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0001-5463-2324
     affiliation: 1
 affiliations:
   - name: Independent Researcher
