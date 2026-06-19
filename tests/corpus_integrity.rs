@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use eeg_codec_standard::adapter::Store;
-use eeg_codec_standard::corpus::{grade_manifest_parallel, load_corpus_manifest, verify_and_load, CorpusError};
-use eeg_codec_standard::harness;
+use open_eeg_codec_standard::adapter::Store;
+use open_eeg_codec_standard::corpus::{grade_manifest_parallel, load_corpus_manifest, verify_and_load, CorpusError};
+use open_eeg_codec_standard::harness;
 
 /// The crate's `corpora/` directory (where smoke manifest paths resolve).
 fn corpora_dir() -> PathBuf {

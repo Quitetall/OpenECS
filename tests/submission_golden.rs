@@ -13,9 +13,9 @@
 
 use std::path::PathBuf;
 
-use eeg_codec_standard::adapter::Store;
-use eeg_codec_standard::harness;
-use eeg_codec_standard::report::{CodecIdentity, CorpusIdentity, EcsSubmission};
+use open_eeg_codec_standard::adapter::Store;
+use open_eeg_codec_standard::harness;
+use open_eeg_codec_standard::report::{CodecIdentity, CorpusIdentity, EcsSubmission};
 
 /// Two small, deterministic, EEG-shaped signals (no RNG).
 fn fixed_corpus() -> Vec<(Vec<Vec<i64>>, f64)> {
@@ -84,7 +84,7 @@ fn submission_round_trips_through_json() {
     let sub = build_submission();
     let back = EcsSubmission::from_json(&sub.to_json()).expect("round-trips");
     assert_eq!(back, sub);
-    assert_eq!(back.spec_version, eeg_codec_standard::SPEC_VERSION);
+    assert_eq!(back.spec_version, open_eeg_codec_standard::SPEC_VERSION);
     assert_eq!(back.summary.worst_grade, 'L');
     assert!(back.task_concordance.is_none());
 }

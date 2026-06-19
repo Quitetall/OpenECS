@@ -1,7 +1,7 @@
 //! Integration tests — the OpenECS standard, exercised end-to-end.
 //!
 //! These tests drive the public crate surface exactly as a third party
-//! would: build a signal, run a codec through [`eeg_codec_standard::harness::run`], and
+//! would: build a signal, run a codec through [`open_eeg_codec_standard::harness::run`], and
 //! assert the verdict. They prove the four load-bearing guarantees of the
 //! standard:
 //!
@@ -16,9 +16,9 @@
 
 use std::f64::consts::PI;
 
-use eeg_codec_standard::adapter::{deserialize, serialize, Codec, Gzip, Store};
-use eeg_codec_standard::harness;
-use eeg_codec_standard::metrics;
+use open_eeg_codec_standard::adapter::{deserialize, serialize, Codec, Gzip, Store};
+use open_eeg_codec_standard::harness;
+use open_eeg_codec_standard::metrics;
 
 /// Deterministic synthetic multichannel signal with cross-band energy.
 fn signal(n_chan: usize, n: usize, fs: f64) -> Vec<Vec<i64>> {
@@ -117,7 +117,7 @@ fn lossy_codec_is_never_graded_lossless() {
         .iter()
         .map(|b| (b.band.clone(), b.r, b.prd))
         .collect();
-    let regraded = eeg_codec_standard::levels::grade(rep.r, rep.prd, rep.cr, rep.snr_db, &band_triples);
+    let regraded = open_eeg_codec_standard::levels::grade(rep.r, rep.prd, rep.cr, rep.snr_db, &band_triples);
     assert_eq!(
         regraded.grade, rep.grade,
         "harness grade must match re-grading its own metrics"
@@ -218,7 +218,7 @@ fn report_serializes_round_trip() {
     let sig = signal(2, 128, 256.0);
     let rep = harness::run(&Store, &sig, 256.0);
     let json = rep.to_json();
-    let back = eeg_codec_standard::report::EcsReport::from_json(&json).expect("report JSON round-trips");
+    let back = open_eeg_codec_standard::report::EcsReport::from_json(&json).expect("report JSON round-trips");
     assert_eq!(back, rep);
     assert_eq!(back.grade, 'L');
 }

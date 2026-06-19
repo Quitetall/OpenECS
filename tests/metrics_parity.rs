@@ -1,4 +1,4 @@
-//! Numerical value-parity contract: Rust `eeg_codec_standard::metrics` ↔ reference reference.
+//! Numerical value-parity contract: Rust `open_eeg_codec_standard::metrics` ↔ reference reference.
 //!
 //! This is the NUMERICAL counterpart to `spec_thresholds.rs` (which pins the
 //! tier *table*). Here we pin the actual metric *values* the Rust code
@@ -44,7 +44,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use eeg_codec_standard::metrics;
+use open_eeg_codec_standard::metrics;
 
 /// A float that may be a JSON number or a sentinel string for non-finite
 /// values (`"inf"`, `"-inf"`, `"nan"`). The reference generator emits the string

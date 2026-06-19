@@ -7,7 +7,7 @@
 //! self-reported numbers, no cherry-picked patients: standardized corpus,
 //! standardized metrics, deterministic pass/fail.
 //!
-//! The crate is `eeg-codec-standard`; the library is `eeg_codec_standard`; the
+//! The crate is `open-eeg-codec-standard`; the library is `open_eeg_codec_standard`; the
 //! reference CLI is `openecs`.
 //!
 //! ## Tiers (strictness order L < N < C < M < A)

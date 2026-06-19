@@ -18,8 +18,8 @@
 use std::f64::consts::PI;
 use std::path::PathBuf;
 
-use eeg_codec_standard::corpus::sha256_hex;
-use eeg_codec_standard::subprocess::write_edf_bytes;
+use open_eeg_codec_standard::corpus::sha256_hex;
+use open_eeg_codec_standard::subprocess::write_edf_bytes;
 
 /// One synthetic EEG-shaped channel: a deterministic sum of band-placed
 /// sinusoids (delta/theta/alpha/beta/gamma) + a small DC term, scaled to a

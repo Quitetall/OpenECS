@@ -1,7 +1,7 @@
 # OpenECS specification changelog
 
 All notable changes to the OpenECS standard. The spec is versioned
-independently of the `eeg-codec-standard` crate. See
+independently of the `open-eeg-codec-standard` crate. See
 [`OpenECS-v1.0.md`](OpenECS-v1.0.md) §11 for the version/stability policy.
 
 ## 1.0 — 2026-06-19 (first OpenECS release)

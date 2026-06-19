@@ -9,11 +9,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use eeg_codec_standard::adapter::Codec;
-use eeg_codec_standard::adapters_external::{ExternalCodec, InputFormat, OutputFormat};
-use eeg_codec_standard::harness;
-use eeg_codec_standard::manifest::load_codec_manifest;
-use eeg_codec_standard::subprocess::{SampleDtype, ScratchDir};
+use open_eeg_codec_standard::adapter::Codec;
+use open_eeg_codec_standard::adapters_external::{ExternalCodec, InputFormat, OutputFormat};
+use open_eeg_codec_standard::harness;
+use open_eeg_codec_standard::manifest::load_codec_manifest;
+use open_eeg_codec_standard::subprocess::{SampleDtype, ScratchDir};
 
 /// True iff `sh -c "<probe>"` exits 0 (the tool is usable on this host).
 fn have(probe: &str) -> bool {

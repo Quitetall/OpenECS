@@ -1,6 +1,6 @@
 # OpenECS — the Open EEG Codec Standard
 
-[![crates.io](https://img.shields.io/crates/v/eeg-codec-standard.svg)](https://crates.io/crates/eeg-codec-standard)
+[![crates.io](https://img.shields.io/crates/v/open-eeg-codec-standard.svg)](https://crates.io/crates/open-eeg-codec-standard)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 A **universal, vendor-neutral benchmark standard for EEG signal compression.**
@@ -8,7 +8,7 @@ Grade any codec — lossless, lossy, neural, classical, hybrid, **in any
 language** — against a hash-pinned corpus and get a single, reproducible,
 comparable verdict.
 
-- **Crate:** `eeg-codec-standard` · **library:** `eeg_codec_standard` ·
+- **Crate:** `open-eeg-codec-standard` · **library:** `open_eeg_codec_standard` ·
   **reference CLI:** `openecs`
 - **Spec:** [`SPEC/OpenECS-v1.0.md`](SPEC/OpenECS-v1.0.md) (normative) ·
   [`STANDARD.md`](STANDARD.md) (narrative) · JSON schemas in `SPEC/schemas/`
@@ -31,10 +31,10 @@ encode/decode boundary only — the lossless claim is *checked, not trusted*.
 
 ```bash
 # the `openecs` command-line benchmark
-cargo install eeg-codec-standard
+cargo install open-eeg-codec-standard
 
 # or use it as a library
-cargo add eeg-codec-standard      # then: use eeg_codec_standard::...
+cargo add open-eeg-codec-standard      # then: use open_eeg_codec_standard::...
 ```
 
 ## 60-second quickstart (zero download)
@@ -98,13 +98,13 @@ out the other end.
 ## Use it as a library
 
 ```rust
-use eeg_codec_standard::{adapter::Gzip, harness};
+use open_eeg_codec_standard::{adapter::Gzip, harness};
 
 // `signal` is one Vec<i64> per channel (integer ADC counts); `fs` is the rate.
 let report = harness::run(&Gzip, &signal, 256.0);
 println!("grade ECS-{}  CR {:.2}  R {:.4}", report.grade, report.cr, report.r);
 // Implement the `Codec` trait for your own in-process codec, or drive an
-// external one via `eeg_codec_standard::manifest` + `corpus::grade_manifest_parallel`.
+// external one via `open_eeg_codec_standard::manifest` + `corpus::grade_manifest_parallel`.
 ```
 
 ## Canonical corpus (cross-lab comparable numbers)

@@ -1,6 +1,6 @@
 //! OpenECS tier-threshold pinning contract.
 //!
-//! The tier table in [`eeg_codec_standard::levels`] is the canonical OpenECS
+//! The tier table in [`open_eeg_codec_standard::levels`] is the canonical OpenECS
 //! spec — what the grading gate enforces. This test hard-codes the published
 //! tier thresholds as an independent contract and asserts the table matches
 //! them field-for-field, so any accidental drift in a threshold trips CI.
@@ -10,7 +10,7 @@
 //! The lossy tiers **N / C / M / A** (global `max_prd`, `min_r`,
 //! `max_snr_loss`, `min_cr` + every per-band `(freq_range, max_prd, min_r)`
 //! triple) are pinned below and compared to
-//! [`eeg_codec_standard::levels::levels()`].
+//! [`open_eeg_codec_standard::levels::levels()`].
 //!
 //! ## Tier L (special-cased)
 //!
@@ -19,7 +19,7 @@
 //! floor `min_cr == 0.8` and no per-band requirements. Its invariants are
 //! pinned on their own terms below rather than via the lossy-tier table.
 
-use eeg_codec_standard::levels::{self, EcsLevel};
+use open_eeg_codec_standard::levels::{self, EcsLevel};
 
 /// The spec contract for one band: `(freq_lo, freq_hi, max_prd, min_r)`.
 type BandContract = (f64, f64, f64, f64);
@@ -39,7 +39,7 @@ struct TierContract {
 /// C / M / A as written in the the canonical spec. These are the
 /// authoritative shared thresholds; the Rust table must equal them.
 const SPEC_TIERS: &[TierContract] = &[
-    // 'N': Near-Lossless (OpenECS v2.0) — max_prd=5.0, min_r=0.99,
+    // 'N': Near-Lossless — max_prd=5.0, min_r=0.99,
     // max_snr_loss=2.0, min_cr=1.0, no per-band requirements.
     TierContract {
         code: 'N',

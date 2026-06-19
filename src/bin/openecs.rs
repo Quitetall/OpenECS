@@ -21,11 +21,11 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
-use eeg_codec_standard::adapter::{deserialize, serialize, Codec, Gzip, Store};
-use eeg_codec_standard::corpus::{self, sha256_hex, CorpusManifest};
-use eeg_codec_standard::report::{CodecIdentity, CorpusIdentity, EcsReport, EcsSubmission};
-use eeg_codec_standard::subprocess::write_edf_bytes;
-use eeg_codec_standard::{charts, edf, harness, manifest, report_html, stats, term};
+use open_eeg_codec_standard::adapter::{deserialize, serialize, Codec, Gzip, Store};
+use open_eeg_codec_standard::corpus::{self, sha256_hex, CorpusManifest};
+use open_eeg_codec_standard::report::{CodecIdentity, CorpusIdentity, EcsReport, EcsSubmission};
+use open_eeg_codec_standard::subprocess::write_edf_bytes;
+use open_eeg_codec_standard::{charts, edf, harness, manifest, report_html, stats, term};
 
 // ─────────────────────────────── demo codec ────────────────────────────────
 
@@ -590,7 +590,7 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
     }
     edfs.sort();
 
-    println!("spec_version = \"{}\"", eeg_codec_standard::SPEC_VERSION);
+    println!("spec_version = \"{}\"", open_eeg_codec_standard::SPEC_VERSION);
     println!("name = \"{}\"", a.name);
     println!("version = \"{}\"", a.version);
     println!();
