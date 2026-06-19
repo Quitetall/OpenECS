@@ -46,4 +46,4 @@ publicly-downloadable benchmark corpus.
 
 ## License
 
-GPL-3.0-or-later.
+Apache 2.0
