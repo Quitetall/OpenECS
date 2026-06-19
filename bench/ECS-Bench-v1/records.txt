@@ -1,0 +1,16 @@
+# ECS-Bench-v1 — canonical record list.
+#
+# Source: PhysioNet CHB-MIT Scalp EEG Database v1.0.0
+#   https://physionet.org/content/chbmit/1.0.0/   (ODC-BY 1.0)
+# Scalp EEG, 256 Hz, uniform sample rate (satisfies the OpenECS EDF reader's
+# single-rate rule). Paths are relative to the CHB-MIT root; `fetch.sh`
+# downloads exactly these, preserving the layout.
+#
+# v1.0.0 set: two seizure-bearing and two interictal hours from subject chb01
+# (a representative mix without ballooning the download). Lines starting with
+# `#` and blank lines are ignored.
+
+chb01/chb01_01.edf
+chb01/chb01_02.edf
+chb01/chb01_03.edf
+chb01/chb01_04.edf

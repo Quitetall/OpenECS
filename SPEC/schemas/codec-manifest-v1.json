@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lamquant.org/lqs/schemas/codec-manifest-v1.json",
+  "title": "CodecManifest",
+  "description": "Language-neutral schema for an OpenECS v1.0 codec manifest. The on-disk form is TOML (see SPEC/OpenECS-v1.0.md §7); this documents the same fields. Mirrors eeg_codec_standard::manifest::CodecManifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["codec"],
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "OpenECS spec version the manifest targets. Defaults to \"1.0\"."
+    },
+    "codec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "cmd", "declared_lossless"],
+      "properties": {
+        "name": { "type": "string", "description": "Report identifier." },
+        "declared_lossless": {
+          "type": "boolean",
+          "description": "The codec author's lossless claim. Verified, not trusted."
+        },
+        "cmd": {
+          "type": "string",
+          "description": "Binary or script to invoke. Resolved: this path → $ECS_CODEC_<NAME>_BIN → PATH."
+        },
+        "prefix_args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fixed tokens inserted before the encode/decode subcommand."
+        },
+        "sample_dtype": {
+          "type": "string",
+          "enum": ["i16", "i32", "i64"],
+          "description": "Width of the decode 'raw' output integers. Default i32."
+        },
+        "input_format": {
+          "type": "string",
+          "enum": ["edf", "ecs0"],
+          "description": "Format of the encode input file. Default edf."
+        },
+        "output_format": {
+          "type": "string",
+          "enum": ["raw", "ecs0"],
+          "description": "Format of the decode output file. Default raw."
+        },
+        "timeout_secs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Per-invocation timeout. Default 600."
+        },
+        "encode_args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional encode arg template. Placeholders: {input} {output} {channels} {samples} {rate} {dtype}. Omit for the default contract."
+        },
+        "decode_args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional decode arg template. Same placeholders. Omit for the default contract."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Extra environment variables merged over the ECS_* variables."
+        }
+      }
+    }
+  }
+}

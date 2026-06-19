@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lamquant.org/lqs/schemas/corpus-manifest-v1.json",
+  "title": "CorpusManifest",
+  "description": "Language-neutral schema for an OpenECS v1.0 corpus manifest. The on-disk form is TOML (see SPEC/OpenECS-v1.0.md §8). Mirrors eeg_codec_standard::corpus::CorpusManifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "file"],
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "OpenECS spec version the manifest targets. Defaults to \"1.0\"."
+    },
+    "name": { "type": "string", "description": "Corpus identifier, e.g. \"ecs-smoke\"." },
+    "version": { "type": "string", "description": "Corpus version, e.g. \"1.0.0\"." },
+    "file": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The pinned files. In TOML this is an array of [[file]] tables.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "fs", "n_chan", "n_samples"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the EDF file, relative to the manifest's directory."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Lowercase-hex SHA-256 of the file bytes. Verified before grading."
+          },
+          "fs": { "type": "number", "exclusiveMinimum": 0, "description": "Expected sample rate in Hz." },
+          "n_chan": { "type": "integer", "minimum": 1, "description": "Expected channel count." },
+          "n_samples": { "type": "integer", "minimum": 1, "description": "Expected samples per channel." }
+        }
+      }
+    }
+  }
+}

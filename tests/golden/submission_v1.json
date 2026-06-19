@@ -1,0 +1,132 @@
+{
+  "spec_version": "1.0",
+  "codec": {
+    "name": "store",
+    "manifest_sha256": null
+  },
+  "corpus": {
+    "name": "golden-fixture",
+    "version": "1.0.0"
+  },
+  "reports": [
+    {
+      "spec_version": "1.0",
+      "codec": "store",
+      "dataset": "golden-fixture",
+      "n_files": 1,
+      "bit_exact": true,
+      "grade": "L",
+      "cr": 1.0,
+      "prd": 0.0,
+      "prdn": 0.0,
+      "r": 1.0,
+      "snr_db": 120.0,
+      "qs": 1.0,
+      "per_band": [
+        {
+          "band": "sub-delta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "delta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "theta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "alpha",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "beta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "gamma",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        }
+      ],
+      "throughput_mibs": 0.0,
+      "peak_bytes": 1040,
+      "violations": []
+    },
+    {
+      "spec_version": "1.0",
+      "codec": "store",
+      "dataset": "golden-fixture",
+      "n_files": 1,
+      "bit_exact": true,
+      "grade": "L",
+      "cr": 1.0,
+      "prd": 0.0,
+      "prdn": 0.0,
+      "r": 1.0,
+      "snr_db": 120.0,
+      "qs": 1.0,
+      "per_band": [
+        {
+          "band": "sub-delta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "delta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "theta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "alpha",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "beta",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        },
+        {
+          "band": "gamma",
+          "r": 1.0,
+          "prd": 0.0,
+          "snr": 120.0
+        }
+      ],
+      "throughput_mibs": 0.0,
+      "peak_bytes": 1172,
+      "violations": []
+    }
+  ],
+  "summary": {
+    "codec": "store",
+    "n_files": 2,
+    "mean_cr": 1.0,
+    "mean_prd": 0.0,
+    "mean_r": 1.0,
+    "worst_grade": "L",
+    "all_bit_exact": true
+  }
+}

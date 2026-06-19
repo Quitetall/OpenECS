@@ -1,0 +1,33 @@
+# OpenECS smoke corpus — a tiny, redistributable, SYNTHETIC EEG corpus.
+#
+# Ships in-repo so OpenECS runs offline with zero external data (SPEC/OpenECS-v1.0.md
+# §8). NOT patient data: deterministic band-placed sinusoids in the EDF i16
+# digital domain, regenerable byte-for-byte via
+# `cargo run --example gen_smoke_corpus`. Paths are relative to this file's
+# directory. For real public corpora (CHB-MIT, TUEG, …) see README.md and pin
+# them locally with `openecs emit-corpus-manifest`.
+
+spec_version = "1.0"
+name = "ecs-smoke"
+version = "1.0.0"
+
+[[file]]
+path = "smoke/synthetic_a.edf"
+sha256 = "9a2ad884fb16d7c7a75162522fad33be7b60a780b631063197d747faa484feb9"
+fs = 256.0
+n_chan = 4
+n_samples = 1024
+
+[[file]]
+path = "smoke/synthetic_b.edf"
+sha256 = "9e71c2ecc1118d02a83696fc8ee7e9e600c173537653627320b463c808a3d96b"
+fs = 128.0
+n_chan = 6
+n_samples = 768
+
+[[file]]
+path = "smoke/synthetic_c.edf"
+sha256 = "a5f61ab036ed0de81eff88c5c24d5b740a864a624468579682bca1e025710922"
+fs = 256.0
+n_chan = 2
+n_samples = 512

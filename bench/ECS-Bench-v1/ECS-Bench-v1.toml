@@ -1,0 +1,42 @@
+# ECS-Bench-v1 — the canonical EEG-compression benchmark corpus (reference lock).
+#
+# Source: PhysioNet CHB-MIT Scalp EEG Database v1.0.0 (ODC-BY 1.0).
+# Data is NOT shipped here — fetch it, then these SHA-256 pins guarantee every
+# lab grades byte-identical bytes. Paths are relative to THIS file's directory;
+# `sh fetch.sh` (run from here) downloads into ./data to match. See README.md.
+#
+#   sh fetch.sh                                                  # -> ./data/chb01/*.edf
+#   openecs verify-corpus --corpus-manifest ECS-Bench-v1.toml  # sha256 + shape
+#   openecs bench --codec-manifest YOUR.toml --corpus-manifest ECS-Bench-v1.toml --report r.html
+
+spec_version = "1.0"
+name = "ECS-Bench-v1"
+version = "1.0.0"
+
+[[file]]
+path = "data/chb01/chb01_01.edf"
+sha256 = "92ec026f633dca94ee74c2e2b67cf9d58aa50da700b650a1696cf497dac073e3"
+fs = 256.0
+n_chan = 23
+n_samples = 921600
+
+[[file]]
+path = "data/chb01/chb01_02.edf"
+sha256 = "185bebea970f5dfac5b3044d04b9f7c4fa007b8c6bbea744e8b69f8b39d1f060"
+fs = 256.0
+n_chan = 23
+n_samples = 921600
+
+[[file]]
+path = "data/chb01/chb01_03.edf"
+sha256 = "4c4a95a9b4331aeaadadd538763eb2e735950d9aa615b85ee6246c784be8ae90"
+fs = 256.0
+n_chan = 23
+n_samples = 921600
+
+[[file]]
+path = "data/chb01/chb01_04.edf"
+sha256 = "d91d190b2362697fe2cdef922a593baabadcb12fde437bd8d50c01b084ca9030"
+fs = 256.0
+n_chan = 23
+n_samples = 921600

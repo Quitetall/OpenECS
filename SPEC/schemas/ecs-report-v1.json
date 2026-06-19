@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lamquant.org/lqs/schemas/ecs-report-v1.json",
+  "title": "EcsReport",
+  "description": "The standard OpenECS per-file report record for OpenECS v1.0. Mirrors eeg_codec_standard::report::EcsReport.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "spec_version", "codec", "dataset", "n_files", "bit_exact", "grade",
+    "cr", "prd", "prdn", "r", "snr_db", "qs", "per_band",
+    "throughput_mibs", "peak_bytes", "violations"
+  ],
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "description": "OpenECS spec version this report conforms to, e.g. \"1.0\".",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "codec": { "type": "string", "description": "Codec name / report identifier." },
+    "dataset": { "type": "string", "description": "Corpus / holdout identifier." },
+    "n_files": { "type": "integer", "minimum": 0 },
+    "bit_exact": { "type": "boolean", "description": "Integer-domain exact reconstruction." },
+    "grade": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1,
+      "description": "Single-char tier code: 'L', 'C', 'M', or 'A'. The below-floor sentinel is the Rust char '\\0', which serde serializes as the one-char JSON string \"\\u0000\"."
+    },
+    "cr": { "type": "number", "description": "Pooled compression ratio raw/comp." },
+    "prd": { "type": "number", "minimum": 0 },
+    "prdn": { "type": "number", "minimum": 0 },
+    "r": { "type": "number" },
+    "snr_db": { "type": "number" },
+    "qs": { "type": "number" },
+    "per_band": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/bandResult" }
+    },
+    "throughput_mibs": { "type": "number", "minimum": 0 },
+    "peak_bytes": { "type": "integer", "minimum": 0 },
+    "violations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Why the next-higher tier failed (climb-a-tier to-do list)."
+    }
+  },
+  "$defs": {
+    "bandResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["band", "r", "prd", "snr"],
+      "properties": {
+        "band": { "type": "string" },
+        "r": { "type": "number" },
+        "prd": { "type": "number" },
+        "snr": { "type": "number" }
+      }
+    }
+  }
+}
