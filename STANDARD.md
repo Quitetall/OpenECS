@@ -65,7 +65,7 @@ fidelity floors. The grade is the **highest tier the codec fully satisfies**
 | Tier | Name | Global gate | Per-band reqs | Meaning |
 |------|------|-------------|---------------|---------|
 | **L** | Lossless | PRD **exactly 0** on the integer sample domain **AND** CR ≥ **0.8** | none | Bit-exact reconstruction. The only honest lossless claim. |
-| **N** | Near-Lossless | R ≥ **0.99**, PRD ≤ **5.0 %**, CR ≥ **1.0** | none | Small-error, shape-preserved, not bit-exact. The strongest non-lossless tier. *(v1.1)* |
+| **N** | Near-Lossless | R ≥ **0.99**, PRD ≤ **5.0 %**, CR ≥ **1.0** | none | Small-error, shape-preserved, not bit-exact. The strongest non-lossless tier. |
 | **C** | Clinical | R ≥ **0.95**, PRD ≤ **9.0 %**, CR ≥ **20.0** | δ θ α β γ (below) | Distortion small enough for clinical read. |
 | **M** | Monitoring | R ≥ **0.85**, PRD ≤ **20.0 %**, CR ≥ **100.0** | δ θ α β γ (below) | Usable for continuous monitoring. |
 | **A** | Alerting | R ≥ **0.70**, PRD ≤ **40.0 %**, CR ≥ **200.0** | δ θ α β γ (below) | Coarse, but events still detectable. |

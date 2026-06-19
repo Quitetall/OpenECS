@@ -239,9 +239,9 @@ fn check_lossy(
 /// 2. **N → C → M → A descent.** A lossy tier passes iff the global R, PRD,
 ///    and CR thresholds are met AND every measured band meets its
 ///    per-band R and PRD floors. The highest fully-passing tier wins.
-///    `N` (Near-Lossless) is the strictest lossy tier — negligible
-///    distortion (R ≥ 0.999, PRD ≤ 0.5 %) without bit-exactness — and
-///    carries no per-band requirements.
+///    `N` (Near-Lossless) is the strictest lossy tier — small distortion
+///    (R ≥ 0.99, PRD ≤ 5.0 %) without bit-exactness — and carries no
+///    per-band requirements.
 /// 3. **Below floor.** If no tier passes, grade is the `'\0'` sentinel.
 ///
 /// `per_band` is a slice of `(band_name, band_r, band_prd)` triples.
