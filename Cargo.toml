@@ -3,12 +3,12 @@ name = "eeg-codec-standard"
 version = "0.9.0"
 edition = "2021"
 rust-version = "1.74"
-license = "GPL-3.0-or-later"
+license = "Apache-2.0"
 description = "OpenECS — a universal, vendor-neutral Open EEG Codec Standard: grade any EEG codec (any language, via a file-based contract) against a hash-pinned corpus into one comparable verdict."
 repository = "https://github.com/Quitetall/OpenECS"
 homepage = "https://github.com/Quitetall/OpenECS"
 documentation = "https://docs.rs/eeg-codec-standard"
-readme = "STANDARD.md"
+readme = "README.md"
 keywords = ["eeg", "compression", "benchmark", "codec", "biomedical"]
 categories = ["science", "compression", "command-line-utilities"]
 
