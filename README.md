@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/open-eeg-codec-standard.svg)](https://crates.io/crates/open-eeg-codec-standard)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Vendor-neutral benchmark standard for EEG signal compression. Grades any codec — lossless, lossy, neural, classical, any language — against a hash-pinned corpus and produces a single reproducible compliance verdict.
+Vendor-neutral benchmark standard for EEG signal compression. Grades **any codec in any language** against a hash-pinned corpus and produces a single reproducible compliance verdict.
 
 - **Crate:** `open-eeg-codec-standard` · **library:** `open_eeg_codec_standard` · **CLI:** `openecs`
 - **Spec:** [`SPEC/OpenECS-v1.0.md`](SPEC/OpenECS-v1.0.md) (normative) · [`STANDARD.md`](STANDARD.md) (narrative) · JSON schemas in `SPEC/schemas/`
