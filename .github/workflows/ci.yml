@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: Build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: openecs-cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            openecs-cargo-${{ runner.os }}-
+      - name: cargo fmt --check
+        run: cargo fmt -- --check
+      - name: cargo clippy
+        run: cargo clippy -- -D warnings
+      - name: cargo build
+        run: cargo build
+      - name: cargo test
+        run: cargo test
+
+  smoke-corpus:
+    name: Smoke corpus integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Regenerate smoke corpus (example must compile + run)
+        run: cargo run --example gen_smoke_corpus
+      - name: Verify corpus SHA-256 unchanged
+        run: |
+          # The smoke EDFs are committed; regenerating must be idempotent.
+          git diff --exit-code corpora/smoke/
