@@ -59,6 +59,7 @@ pub mod edf;
 pub mod harness;
 pub mod levels;
 pub mod manifest;
+pub mod measurement;
 pub mod metrics;
 pub mod report;
 pub mod report_html;
