@@ -94,8 +94,12 @@ impl MeasurementProvenance {
         if self.standard != MEASUREMENT_STANDARD {
             return Err(MeasurementError::UnsupportedStandard(self.standard.clone()));
         }
+        if self.standard_version != crate::SPEC_VERSION {
+            return Err(MeasurementError::UnsupportedStandardVersion(
+                self.standard_version.clone(),
+            ));
+        }
         for (name, value) in [
-            ("standard_version", self.standard_version.as_str()),
             ("evaluator", self.evaluator.as_str()),
             ("evaluator_version", self.evaluator_version.as_str()),
             ("input_id", self.input_id.as_str()),
@@ -104,6 +108,8 @@ impl MeasurementProvenance {
                 return Err(MeasurementError::EmptyProvenanceField(name));
             }
         }
+        // Programmatic construction canonicalizes uppercase input. The wire
+        // contract accepts lowercase only so equivalent artifacts have one ID.
         if self.artifact_sha256.len() != 64
             || !self
                 .artifact_sha256
@@ -121,6 +127,8 @@ impl MeasurementProvenance {
 #[serde(try_from = "UncheckedMeasurementSet")]
 pub struct MeasurementSet {
     pub provenance: MeasurementProvenance,
+    /// Direct mutation may violate the invariant until [`Self::validate`] is
+    /// called. Decision code should use [`Self::require`] before reading.
     pub metrics: BTreeMap<String, f64>,
 }
 
@@ -170,7 +178,9 @@ impl MeasurementSet {
         Ok(())
     }
 
-    /// Require the metrics a downstream decision actually consumes.
+    /// Revalidate the entire set, then require the metrics a downstream
+    /// decision consumes. The repeated validation is the fail-closed boundary
+    /// for public DTO fields, not a performance optimization.
     pub fn require(&self, names: &[&str]) -> Result<(), MeasurementError> {
         self.validate()?;
         for name in names {
@@ -185,6 +195,7 @@ impl MeasurementSet {
 /// Stable categories for evaluator process failures.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum MeasurementFailureKind {
     Launch,
     Timeout,
@@ -266,9 +277,11 @@ impl MeasurementAttempt {
 
 /// Validation failures at the measurement boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MeasurementError {
     UnsupportedContractVersion(String),
     UnsupportedStandard(String),
+    UnsupportedStandardVersion(String),
     EmptyProvenanceField(&'static str),
     InvalidArtifactSha256,
     EmptyMetrics,
@@ -287,6 +300,9 @@ impl fmt::Display for MeasurementError {
             }
             Self::UnsupportedStandard(standard) => {
                 write!(f, "unsupported measurement standard {standard:?}")
+            }
+            Self::UnsupportedStandardVersion(version) => {
+                write!(f, "unsupported OpenECS standard version {version:?}")
             }
             Self::EmptyProvenanceField(field) => {
                 write!(f, "measurement provenance field {field} is empty")

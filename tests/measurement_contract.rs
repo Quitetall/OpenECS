@@ -68,6 +68,15 @@ fn incomplete_or_unsupported_provenance_is_rejected() {
             "2.0".to_string()
         ))
     );
+
+    let mut unsupported_standard = provenance();
+    unsupported_standard.standard_version = "0.9".to_string();
+    assert_eq!(
+        unsupported_standard.validate(),
+        Err(MeasurementError::UnsupportedStandardVersion(
+            "0.9".to_string()
+        ))
+    );
     assert_eq!(MEASUREMENT_CONTRACT_VERSION, "1.0");
 }
 
@@ -106,6 +115,17 @@ fn deserialization_revalidates_the_contract() {
     let mut unknown_field = valid;
     unknown_field["measurement"]["metricss"] = serde_json::json!({});
     assert!(serde_json::from_value::<MeasurementAttempt>(unknown_field).is_err());
+
+    let mut unknown_attempt_field = serde_json::to_value(MeasurementAttempt::Measured {
+        measurement: MeasurementSet::new(
+            provenance(),
+            BTreeMap::from([("pearson_r".to_string(), 0.94)]),
+        )
+        .expect("valid measurement"),
+    })
+    .expect("serialize valid attempt");
+    unknown_attempt_field["extra"] = true.into();
+    assert!(serde_json::from_value::<MeasurementAttempt>(unknown_attempt_field).is_err());
 
     let oversized = MeasurementFailure::new(
         provenance(),
