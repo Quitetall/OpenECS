@@ -5,7 +5,7 @@ version = 3
 [[package]]
 name = "abir"
 version = "0.1.0"
-source = "git+https://github.com/Quitetall/ABIR.git?rev=c101513167ad8d7cdefa6387b20c644fdaf66432#c101513167ad8d7cdefa6387b20c644fdaf66432"
+source = "git+https://github.com/Quitetall/ABIR.git?rev=4fb8804c4802877ff5d36ef0e23972b8da57ca3a#4fb8804c4802877ff5d36ef0e23972b8da57ca3a"
 dependencies = [
  "blake3",
  "serde_json",
