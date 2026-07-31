@@ -24,7 +24,7 @@ name = "openecs"
 path = "src/bin/openecs.rs"
 
 [dependencies]
-abir = { version = "=0.1.0", git = "https://github.com/Quitetall/ABIR.git", rev = "6aae536ec9e5491338be20f17b6f8ce6a7efd28e" }
+abir = { version = "=0.1.0", git = "https://github.com/Quitetall/ABIR.git", rev = "92cae253f0a43b0c457cb1c0b773d77420f288a7" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # flate2 with default features = pure-Rust miniz_oxide backend (NO system zlib).
