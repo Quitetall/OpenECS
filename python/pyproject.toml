@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oheeg-val"
+version = "0.1.0"
+description = "Python launcher and typed subprocess API for OpenECS EEG codec validation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "OpenECS contributors" }]
+keywords = ["eeg", "validation", "compression", "openecs"]
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+oheeg-val = "oheeg_val.cli:main"
+
+[project.urls]
+Source = "https://github.com/Quitetall/OpenECS"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
