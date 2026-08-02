@@ -49,8 +49,7 @@ def test_cli_preserves_openecs_exit_status() -> None:
     run.assert_called_once_with(["openecs", "grade"], check=False)
 
 
-def test_cli_reports_missing_openecs(capsys: object) -> None:
-    del capsys
+def test_cli_reports_missing_openecs() -> None:
     with mock.patch(
         "oheeg_val.cli.subprocess.run", side_effect=FileNotFoundError("openecs")
     ):
