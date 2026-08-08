@@ -19,7 +19,7 @@ Vendor-neutral benchmark standard for EEG signal compression. Grades **any codec
 | `ECS-A` | Alerting | R ≥ 0.70, PRD ≤ 40 %, CR ≥ 200 | required |
 | `—` | below floor | fails ECS-A | — |
 
-Grade is the highest tier fully satisfied. The lossless claim (ECS-L) is verified by integer-domain bit comparison — not inferred from the codec's own declaration.
+Grade is the highest tier fully satisfied. The lossless claim (ECS-L) is verified by integer-domain bit comparison, nothing is inferred from the codec's own declaration.
 
 ## Install
 
