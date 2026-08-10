@@ -33,7 +33,7 @@ data:
 ```bash
 # Walk a directory of .edf files, hash each, emit a manifest on stdout.
 cargo run --bin openecs -- emit-corpus-manifest \
-    --root /mnt/4tb/data/Archive/edf/chbmit --name chbmit --version 1.0.0 \
+    --root /mnt/4tb/data/corpora/edf/chbmit --name chbmit --version 1.0.0 \
     > corpora/ecs-chbmit.toml
 ```
 
