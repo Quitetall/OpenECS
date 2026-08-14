@@ -11,16 +11,16 @@
 //! a reference generator, which imports the real reference functions and
 //! freezes their output:
 //!
-//!   - `py_prd`        ← `ai_models.metrics.prd_numpy`
-//!   - `py_pearson_r`  ← `ai_models.metrics.pearson_r_numpy` (single-pass;
-//!                        bit-identical to the Rust formula on these fixtures)
-//!   - `py_snr_db`     ← `the reference.snr_db`
-//!   - `py_prdn`       ← numpy replication of the Rust `prdn` formula
-//!                        (no reference reference exists for normalized PRD)
-//!   - `py_entropy_bits` ← numpy replication of `entropy_from_counts`
-//!   - `py_cr`         ← numpy replication of `compression_ratio`
-//!   - `py_prd_lqs` / `py_pearson_r_lqs` ← `the reference.{prd,pearson_r}`
-//!                        recorded as a CROSS-CHECK (a second reference impl)
+//! - `py_prd`        ← `ai_models.metrics.prd_numpy`
+//! - `py_pearson_r`  ← `ai_models.metrics.pearson_r_numpy` (single-pass;
+//!   bit-identical to the Rust formula on these fixtures)
+//! - `py_snr_db`     ← `the reference.snr_db`
+//! - `py_prdn`       ← numpy replication of the Rust `prdn` formula
+//!   (no reference reference exists for normalized PRD)
+//! - `py_entropy_bits` ← numpy replication of `entropy_from_counts`
+//! - `py_cr`         ← numpy replication of `compression_ratio`
+//! - `py_prd_lqs` / `py_pearson_r_lqs` ← `the reference.{prd,pearson_r}`
+//!   recorded as a CROSS-CHECK (a second reference impl)
 //!
 //! This test is PURE RUST — it never invokes an external runtime. The golden JSON is
 //! the frozen contract, matching the project's "pin against frozen golden

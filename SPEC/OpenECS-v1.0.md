@@ -356,10 +356,20 @@ names a corpus, its version, and each file with a pinned SHA-256, sample rate, a
 shape. A grader MUST verify each file's SHA-256 against the manifest before
 grading and MUST refuse (integrity error) on any mismatch.
 
+New manifest writers MUST also emit `abir_identity`. Its `content_id` is the ABIR
+logical ContentId of decoded channel-major i64 samples plus exact sample rates,
+shapes, sorted relative source keys, and modality. File SHA-256 remains the
+physical-byte integrity pin. Readers MAY accept historical manifests without
+`abir_identity`; when present, graders MUST verify it before accepting results.
+
 ```toml
 spec_version = "1.0"
 name = "ecs-smoke"
 version = "1.0.0"
+
+[abir_identity]
+schema = "org.quitetall.openecs.corpus-identity-projection-v1"
+content_id = "…64 lowercase hex…"
 
 [[file]]
 path = "smoke/synthetic_a.edf"   # relative to the manifest's directory

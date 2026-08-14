@@ -5,7 +5,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use open_eeg_codec_standard::adapter::Store;
-use open_eeg_codec_standard::corpus::{grade_manifest_parallel, load_corpus_manifest, verify_and_load, CorpusError};
+use open_eeg_codec_standard::corpus::{
+    grade_manifest_parallel, load_corpus_manifest, verify_and_load, CorpusAbirIdentity,
+    CorpusError, ABIR_IDENTITY_SCHEMA,
+};
 use open_eeg_codec_standard::harness;
 
 /// The crate's `corpora/` directory (where smoke manifest paths resolve).
@@ -83,6 +86,18 @@ fn parallel_grader_rejects_tampered_hash() {
     manifest.file[1].sha256 = "0".repeat(64);
     let err = grade_manifest_parallel(&manifest, corpora_dir(), &Store, 1, || {});
     assert!(matches!(err, Err(CorpusError::Integrity { .. })), "integrity enforced in parallel");
+}
+
+#[test]
+fn parallel_grader_rejects_semantic_identity_mismatch() {
+    let mut manifest =
+        load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
+    manifest.abir_identity = Some(CorpusAbirIdentity {
+        schema: ABIR_IDENTITY_SCHEMA.to_string(),
+        content_id: "0".repeat(64),
+    });
+    let err = grade_manifest_parallel(&manifest, corpora_dir(), &Store, 1, || {});
+    assert!(matches!(err, Err(CorpusError::Semantic(_))));
 }
 
 #[test]

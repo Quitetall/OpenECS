@@ -316,7 +316,7 @@ mod tests {
     /// samples_per_record and record_duration = 1.0, so fs is uniform.
     fn build_edf(labels: &[&str], samples_per_record: usize, records: &[Vec<i16>]) -> Vec<u8> {
         let ns = labels.len();
-        let n_records = if ns == 0 { 0 } else { records.len() / ns };
+        let n_records = records.len().checked_div(ns).unwrap_or(0);
         let header_bytes = HEADER_BLOCK + ns * HEADER_BLOCK;
 
         let mut buf = Vec::new();

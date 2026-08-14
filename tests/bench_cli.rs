@@ -3,6 +3,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use open_eeg_codec_standard::corpus::CorpusManifest;
+
 /// Path to the compiled binary (cargo sets this for integration tests).
 fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_openecs")
@@ -65,6 +67,39 @@ fn verify_corpus_passes_on_smoke() {
         .expect("run verify-corpus");
     assert!(out.status.success(), "smoke corpus verifies");
     assert!(String::from_utf8_lossy(&out.stdout).contains("all 3 files verified"));
+}
+
+#[test]
+fn emitted_manifest_carries_abir_semantic_identity() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpora");
+    let out = Command::new(bin())
+        .args([
+            "emit-corpus-manifest",
+            "--name",
+            "emitted-smoke",
+            "--version",
+            "1.2.3",
+            "--root",
+        ])
+        .arg(&root)
+        .output()
+        .expect("emit manifest");
+    assert!(out.status.success(), "manifest emission succeeds");
+    let text = String::from_utf8(out.stdout).expect("manifest is UTF-8");
+    let manifest: CorpusManifest = toml::from_str(&text).expect("manifest parses");
+    let identity = manifest
+        .abir_identity
+        .expect("ABIR identity is mandatory on new writes");
+    assert_eq!(
+        identity.schema,
+        open_eeg_codec_standard::corpus::ABIR_IDENTITY_SCHEMA
+    );
+    assert_eq!(identity.content_id.len(), 64);
+    assert!(identity
+        .content_id
+        .bytes()
+        .all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(manifest.file.len(), 3);
 }
 
 #[test]

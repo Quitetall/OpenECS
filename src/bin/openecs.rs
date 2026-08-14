@@ -13,7 +13,7 @@
 //! the built-in fixture or an EDF and prints a single report.
 //!
 //! Exit codes: 0 pass · 1 below-floor · 2 unknown codec · 3 EDF read error ·
-//! 4 corpus integrity/shape failure · 5 manifest load/parse error.
+//! 4 corpus integrity/shape/semantic failure · 5 manifest load/parse error.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -22,7 +22,10 @@ use clap::{Args, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use open_eeg_codec_standard::adapter::{deserialize, serialize, Codec, Gzip, Store};
-use open_eeg_codec_standard::corpus::{self, sha256_hex, CorpusManifest};
+use open_eeg_codec_standard::corpus::{
+    self, decoded_signal_content_id, semantic_content_id_from_payloads, sha256_hex,
+    CorpusAbirIdentity, CorpusFileEntry, CorpusManifest, ABIR_IDENTITY_SCHEMA,
+};
 use open_eeg_codec_standard::report::{CodecIdentity, CorpusIdentity, EcsReport, EcsSubmission};
 use open_eeg_codec_standard::subprocess::write_edf_bytes;
 use open_eeg_codec_standard::{charts, edf, harness, manifest, report_html, stats, term};
@@ -572,7 +575,10 @@ fn cmd_verify_corpus(path: &Path) -> ExitCode {
                     sig.first().map(|c| c.len()).unwrap_or(0)
                 );
             }
-            println!("\nOK: all {} files verified (sha256 + shape).", files.len());
+            println!(
+                "\nOK: all {} files verified (sha256 + shape + declared semantic identity).",
+                files.len()
+            );
             ExitCode::SUCCESS
         }
         Err(e) => {
@@ -590,12 +596,8 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
     }
     edfs.sort();
 
-    println!("spec_version = \"{}\"", open_eeg_codec_standard::SPEC_VERSION);
-    println!("name = \"{}\"", a.name);
-    println!("version = \"{}\"", a.version);
-    println!();
-
-    let mut emitted = 0usize;
+    let mut entries = Vec::new();
+    let mut payload_ids = Vec::new();
     for path in &edfs {
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
@@ -618,22 +620,56 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
             continue;
         }
         let rel = path.strip_prefix(&a.root).unwrap_or(path);
-        println!("[[file]]");
-        println!("path = \"{}\"", rel.display());
-        println!("sha256 = \"{}\"", sha256_hex(&bytes));
-        // `{:?}` renders a whole number with a decimal (256.0, not 256).
-        println!("fs = {:?}", sig.fs);
-        println!("n_chan = {n_chan}");
-        println!("n_samples = {n_samples}");
-        println!();
-        emitted += 1;
+        let Some(rel) = rel.to_str() else {
+            eprintln!("warning: skip {} (path is not UTF-8)", path.display());
+            continue;
+        };
+        entries.push(CorpusFileEntry {
+            path: rel.replace('\\', "/"),
+            sha256: sha256_hex(&bytes),
+            fs: sig.fs,
+            n_chan,
+            n_samples,
+        });
+        payload_ids.push(decoded_signal_content_id(&sig.channels));
     }
-    eprintln!("emitted {emitted} file entries from {}", a.root.display());
-    if emitted == 0 {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+    if entries.is_empty() {
+        eprintln!("emitted 0 file entries from {}", a.root.display());
+        return ExitCode::FAILURE;
     }
+
+    let mut manifest = CorpusManifest {
+        spec_version: open_eeg_codec_standard::SPEC_VERSION.to_string(),
+        name: a.name.clone(),
+        version: a.version.clone(),
+        abir_identity: None,
+        file: entries,
+    };
+    let content_id = match semantic_content_id_from_payloads(&manifest, &payload_ids) {
+        Ok(content_id) => content_id,
+        Err(error) => {
+            eprintln!("error: deriving ABIR corpus identity: {error}");
+            return ExitCode::from(4);
+        }
+    };
+    manifest.abir_identity = Some(CorpusAbirIdentity {
+        schema: ABIR_IDENTITY_SCHEMA.to_string(),
+        content_id,
+    });
+    let output = match toml::to_string_pretty(&manifest) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("error: serializing corpus manifest: {error}");
+            return ExitCode::from(5);
+        }
+    };
+    print!("{output}");
+    eprintln!(
+        "emitted {} file entries from {}",
+        manifest.file.len(),
+        a.root.display()
+    );
+    ExitCode::SUCCESS
 }
 
 // ──────────────────────────────── legacy ───────────────────────────────────

@@ -38,7 +38,7 @@ openecs bench --codec gzip --corpus-manifest corpora/ecs-smoke.toml \
 
 Produces a ranked leaderboard (grade, pooled CR, mean-R 95 % bootstrap CI, paired sign-test p-value vs strongest baseline), terminal ASCII charts, and a self-contained HTML report with inline SVG.
 
-Other subcommands: `grade` (single codec, single signal), `verify-corpus` (SHA-256 + shape check), `emit-corpus-manifest` (hash a directory of EDFs into a pinned manifest).
+Other subcommands: `grade` (single codec, single signal), `verify-corpus` (SHA-256 + shape + declared ABIR semantic-identity check), `emit-corpus-manifest` (hash a directory of EDFs into a byte- and meaning-pinned manifest).
 
 ## Codec contract (any language)
 

@@ -2,7 +2,7 @@
 name = "open-eeg-codec-standard"
 version = "0.9.2"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.81"
 license = "Apache-2.0"
 description = "OpenECS — a universal, vendor-neutral Open EEG Codec Standard: grade any EEG codec (any language, via a file-based contract) against a hash-pinned corpus into one comparable verdict."
 repository = "https://github.com/Quitetall/OpenECS"
@@ -24,6 +24,7 @@ name = "openecs"
 path = "src/bin/openecs.rs"
 
 [dependencies]
+abir = { git = "https://github.com/Quitetall/ABIR.git", rev = "7e5700e9ef4e5c7c6a42d829196cd2d0a642f647" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # flate2 with default features = pure-Rust miniz_oxide backend (NO system zlib).

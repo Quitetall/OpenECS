@@ -11,8 +11,14 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use abir::{
+    logical_content_id, Atom, AtomTag, ByteOrder, ConceptId, ContentId, DatasetDraft, DatasetTag,
+    ElementType, Layout, ObjectId, PayloadContentHasher, PayloadDescriptor, Presence, Rational,
+    Recording, RecordingTag, SignalBlock, SourceKey, Stream, StreamTag, TimeAxis, TimeSegment,
+    ValidationLimits,
+};
 use rayon::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapter::{serialize, Codec};
@@ -24,13 +30,16 @@ use crate::report::EcsReport;
 /// per file — the exact shape [`crate::harness::run_corpus`] consumes.
 pub type LoadedCorpus = Vec<(Vec<Vec<i64>>, f64)>;
 
+/// OpenECS projection schema binding decoded corpus meaning to ABIR.
+pub const ABIR_IDENTITY_SCHEMA: &str = "org.quitetall.openecs.corpus-identity-projection-v1";
+
 /// Default `spec_version` when a manifest omits it.
 fn default_spec_version() -> String {
     crate::SPEC_VERSION.to_string()
 }
 
 /// A parsed corpus manifest.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CorpusManifest {
     /// OpenECS spec version the manifest targets.
     #[serde(default = "default_spec_version")]
@@ -39,13 +48,25 @@ pub struct CorpusManifest {
     pub name: String,
     /// Corpus version, e.g. `"1.0.0"`.
     pub version: String,
+    /// Optional ABIR semantic identity. Legacy v1 manifests omit it.
+    #[serde(default)]
+    pub abir_identity: Option<CorpusAbirIdentity>,
     /// The pinned files (TOML `[[file]]` array).
     #[serde(default)]
     pub file: Vec<CorpusFileEntry>,
 }
 
+/// ABIR identity projection carried by current corpus manifests.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CorpusAbirIdentity {
+    /// Projection schema.
+    pub schema: String,
+    /// Lowercase ABIR ContentId of decoded corpus meaning.
+    pub content_id: String,
+}
+
 /// One pinned file in a corpus manifest.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CorpusFileEntry {
     /// Path to the EDF file, relative to the manifest's directory.
     pub path: String,
@@ -86,6 +107,8 @@ pub enum CorpusError {
     },
     /// An EDF file failed to parse.
     Edf(String, std::io::Error),
+    /// ABIR semantic projection could not be constructed or validated.
+    Semantic(String),
 }
 
 impl fmt::Display for CorpusError {
@@ -106,8 +129,233 @@ impl fmt::Display for CorpusError {
                 write!(f, "shape mismatch for {path:?}: {detail}")
             }
             CorpusError::Edf(p, e) => write!(f, "reading EDF {p:?}: {e}"),
+            CorpusError::Semantic(detail) => write!(f, "ABIR corpus identity: {detail}"),
         }
     }
+}
+
+fn indexed_id<T>(kind: u8, index: usize) -> Result<ObjectId<T>, CorpusError> {
+    let index = u64::try_from(index)
+        .map_err(|_| CorpusError::Semantic("corpus entry index exceeds u64".to_string()))?;
+    let mut bytes = [0_u8; 16];
+    bytes[0] = kind;
+    bytes[8..].copy_from_slice(&index.to_be_bytes());
+    Ok(ObjectId::from_bytes(bytes))
+}
+
+fn exact_positive_f64(value: f64) -> Result<Rational, CorpusError> {
+    if !value.is_finite() || value <= 0.0 {
+        return Err(CorpusError::Semantic(format!(
+            "sample rate must be finite and positive, got {value}"
+        )));
+    }
+    let bits = value.to_bits();
+    let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
+    let fraction = bits & ((1_u64 << 52) - 1);
+    let (mantissa, exponent) = if exponent_bits == 0 {
+        (fraction, -1022 - 52)
+    } else {
+        (fraction | (1_u64 << 52), exponent_bits - 1023 - 52)
+    };
+    let mut numerator = i128::from(mantissa);
+    let mut denominator = 1_i128;
+    if exponent >= 0 {
+        let factor = 1_i128.checked_shl(exponent as u32).ok_or_else(|| {
+            CorpusError::Semantic("sample-rate numerator exceeds i128".to_string())
+        })?;
+        numerator = numerator.checked_mul(factor).ok_or_else(|| {
+            CorpusError::Semantic("sample-rate numerator exceeds i128".to_string())
+        })?;
+    } else {
+        denominator = denominator.checked_shl((-exponent) as u32).ok_or_else(|| {
+            CorpusError::Semantic("sample-rate denominator exceeds i128".to_string())
+        })?;
+    }
+    Rational::new(numerator, denominator)
+        .map_err(|error| CorpusError::Semantic(format!("invalid sample-rate rational: {error}")))
+}
+
+/// Hash one decoded channel-major i64 signal using ABIR payload semantics.
+pub fn decoded_signal_content_id(signal: &[Vec<i64>]) -> ContentId {
+    let mut hasher = PayloadContentHasher::new(ElementType::I64);
+    for channel in signal {
+        for sample in channel {
+            hasher.update(&sample.to_le_bytes());
+        }
+    }
+    hasher.finalize()
+}
+
+/// Derive path-root-invariant ABIR identity of decoded corpus meaning.
+///
+/// File SHA-256 values remain separate byte-integrity observations. This
+/// projection seals sorted relative source keys, exact rates, shapes, and i64
+/// sample payloads into a validated ABIR dataset.
+pub fn semantic_content_id(
+    manifest: &CorpusManifest,
+    loaded: &[(Vec<Vec<i64>>, f64)],
+) -> Result<String, CorpusError> {
+    if manifest.file.len() != loaded.len() {
+        return Err(CorpusError::Semantic(format!(
+            "manifest has {} files but decoded corpus has {}",
+            manifest.file.len(),
+            loaded.len()
+        )));
+    }
+    let mut payload_ids = Vec::with_capacity(loaded.len());
+    for (entry, (channels, decoded_rate)) in manifest.file.iter().zip(loaded) {
+        let n_samples = channels.first().map(Vec::len).unwrap_or(0);
+        if channels.len() != entry.n_chan
+            || n_samples != entry.n_samples
+            || n_samples == 0
+            || channels.iter().any(|item| item.len() != n_samples)
+            || (decoded_rate - entry.fs).abs() > 1e-6
+        {
+            return Err(CorpusError::Semantic(format!(
+                "decoded shape or rate for {:?} differs from manifest",
+                entry.path
+            )));
+        }
+        payload_ids.push(decoded_signal_content_id(channels));
+    }
+    semantic_content_id_from_payloads(manifest, &payload_ids)
+}
+
+/// Derive corpus semantic identity from precomputed decoded payload identities.
+///
+/// This bounded-memory form powers manifest emission and parallel grading.
+pub fn semantic_content_id_from_payloads(
+    manifest: &CorpusManifest,
+    payload_ids: &[ContentId],
+) -> Result<String, CorpusError> {
+    if manifest.file.len() != payload_ids.len() {
+        return Err(CorpusError::Semantic(format!(
+            "manifest has {} files but identity projection has {} payloads",
+            manifest.file.len(),
+            payload_ids.len()
+        )));
+    }
+    let mut entries: Vec<_> = manifest.file.iter().zip(payload_ids).collect();
+    entries.sort_by(|(left, _), (right, _)| left.path.cmp(&right.path));
+
+    let mut draft = DatasetDraft::new(ObjectId::<DatasetTag>::from_bytes([0xEC; 16]));
+    let modality = ConceptId::new("abir:modality/eeg")
+        .map_err(|error| CorpusError::Semantic(error.to_string()))?;
+    for (index, (entry, payload_id)) in entries.into_iter().enumerate() {
+        let n_channels = u64::try_from(entry.n_chan)
+            .map_err(|_| CorpusError::Semantic("channel count exceeds u64".to_string()))?;
+        if n_channels == 0 || entry.n_samples == 0 {
+            return Err(CorpusError::Semantic(format!(
+                "{:?} has an empty declared shape",
+                entry.path
+            )));
+        }
+        let n_samples_u64 = u64::try_from(entry.n_samples)
+            .map_err(|_| CorpusError::Semantic("sample count exceeds u64".to_string()))?;
+        let logical_bytes = n_channels
+            .checked_mul(n_samples_u64)
+            .and_then(|value| value.checked_mul(8))
+            .ok_or_else(|| CorpusError::Semantic("payload byte count overflow".to_string()))?;
+        let atom_id = indexed_id::<AtomTag>(3, index)?;
+        let stream_id = indexed_id::<StreamTag>(2, index)?;
+        let recording_id = indexed_id::<RecordingTag>(1, index)?;
+        let payload = PayloadDescriptor::new(
+            *payload_id,
+            logical_bytes,
+            ElementType::I64,
+            ByteOrder::Little,
+            vec![n_channels, n_samples_u64],
+            Layout::DenseRowMajor,
+            None,
+            None,
+        );
+        let segment = TimeSegment::new(
+            Rational::new(0, 1).expect("zero rational"),
+            exact_positive_f64(entry.fs)?,
+            n_samples_u64,
+        )
+        .map_err(|error| CorpusError::Semantic(error.to_string()))?;
+        draft.add_atom(Atom::SignalBlock(SignalBlock::new(
+            atom_id,
+            Presence::Present,
+            Some(payload),
+            TimeAxis::Regular(segment),
+            None,
+        )));
+        draft.add_stream(Stream::new(
+            stream_id,
+            recording_id,
+            modality.clone(),
+            vec![atom_id],
+            None,
+            None,
+            None,
+        ));
+        let mut recording = Recording::new(recording_id, vec![stream_id]);
+        recording.add_source_key(
+            SourceKey::new("openecs.corpus.path", &entry.path)
+                .map_err(|error| CorpusError::Semantic(format!("invalid source key: {error}")))?,
+        );
+        draft.add_recording(recording);
+    }
+
+    let dataset = draft
+        .validate(ValidationLimits::default())
+        .map_err(|report| {
+            CorpusError::Semantic(format!("ABIR dataset validation failed: {report:?}"))
+        })?;
+    logical_content_id(&dataset)
+        .map(|content_id| content_id.to_string())
+        .map_err(|error| CorpusError::Semantic(format!("canonicalization failed: {error}")))
+}
+
+fn declared_content_id(manifest: &CorpusManifest) -> Result<Option<&str>, CorpusError> {
+    let Some(identity) = &manifest.abir_identity else {
+        return Ok(None);
+    };
+    if identity.schema != ABIR_IDENTITY_SCHEMA {
+        return Err(CorpusError::Semantic(format!(
+            "projection schema {:?} is unsupported",
+            identity.schema
+        )));
+    }
+    if identity.content_id.len() != 64
+        || !identity
+            .content_id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(CorpusError::Semantic(
+            "declared ContentId must be 64 lowercase hexadecimal digits".to_string(),
+        ));
+    }
+    Ok(Some(&identity.content_id))
+}
+
+fn verify_observed_content_id(
+    manifest: &CorpusManifest,
+    observed: &str,
+) -> Result<(), CorpusError> {
+    let Some(expected) = declared_content_id(manifest)? else {
+        return Ok(());
+    };
+    if observed != expected {
+        return Err(CorpusError::Semantic(format!(
+            "ContentId mismatch: expected {expected}, got {observed}"
+        )));
+    }
+    Ok(())
+}
+
+fn verify_semantic_identity(
+    manifest: &CorpusManifest,
+    loaded: &[(Vec<Vec<i64>>, f64)],
+) -> Result<(), CorpusError> {
+    if declared_content_id(manifest)?.is_none() {
+        return Ok(());
+    }
+    let observed = semantic_content_id(manifest, loaded)?;
+    verify_observed_content_id(manifest, &observed)
 }
 
 impl std::error::Error for CorpusError {}
@@ -176,6 +424,7 @@ pub fn verify_and_load<P: AsRef<Path>>(
         out.push((signal.channels, signal.fs));
     }
 
+    verify_semantic_identity(manifest, &out)?;
     Ok(out)
 }
 
@@ -239,11 +488,12 @@ where
     F: Fn() + Sync,
 {
     let base = base_dir.as_ref();
+    let verify_abir_identity = declared_content_id(manifest)?.is_some();
     let indexed: Vec<(usize, &CorpusFileEntry)> = manifest.file.iter().enumerate().collect();
 
-    let mut graded: Vec<(usize, EcsReport, u64, u64)> = indexed
+    let mut graded: Vec<(usize, EcsReport, u64, u64, Option<ContentId>)> = indexed
         .par_iter()
-        .map(|(idx, entry)| -> Result<(usize, EcsReport, u64, u64), CorpusError> {
+        .map(|(idx, entry)| -> Result<_, CorpusError> {
             let full = base.join(&entry.path);
 
             // Integrity: bytes must hash to the pinned digest.
@@ -262,6 +512,8 @@ where
             let signal =
                 edf::read_edf(&full).map_err(|e| CorpusError::Edf(entry.path.clone(), e))?;
             check_shape(entry, &signal)?;
+            let payload_id =
+                verify_abir_identity.then(|| decoded_signal_content_id(&signal.channels));
             let raw = serialize(&signal.channels).len() as u64;
             let mut rep = harness::run_measured(codec, &signal.channels, signal.fs, repeats);
             rep.dataset = manifest.name.clone();
@@ -272,15 +524,25 @@ where
             };
 
             progress();
-            Ok((*idx, rep, raw, comp))
+            Ok((*idx, rep, raw, comp, payload_id))
         })
         .collect::<Result<Vec<_>, CorpusError>>()?;
 
     // Restore manifest order for deterministic reporting.
-    graded.sort_by_key(|(idx, _, _, _)| *idx);
+    graded.sort_by_key(|(idx, _, _, _, _)| *idx);
+    if verify_abir_identity {
+        let payload_ids: Vec<_> = graded
+            .iter()
+            .map(|(_, _, _, _, payload_id)| {
+                payload_id.expect("identity requested for every graded file")
+            })
+            .collect();
+        let observed = semantic_content_id_from_payloads(manifest, &payload_ids)?;
+        verify_observed_content_id(manifest, &observed)?;
+    }
     let per_file: Vec<(EcsReport, u64, u64)> = graded
         .into_iter()
-        .map(|(_, rep, raw, comp)| (rep, raw, comp))
+        .map(|(_, rep, raw, comp, _)| (rep, raw, comp))
         .collect();
     let summary = harness::summarize(codec.name(), &per_file);
     let reports = per_file.into_iter().map(|(r, _, _)| r).collect();
@@ -325,6 +587,48 @@ mod tests {
     }
 
     #[test]
+    fn semantic_content_id_is_manifest_order_and_root_invariant() {
+        let first_entry = CorpusFileEntry {
+            path: "a.edf".to_string(),
+            sha256: "1".repeat(64),
+            fs: 256.0,
+            n_chan: 1,
+            n_samples: 3,
+        };
+        let second_entry = CorpusFileEntry {
+            path: "nested/b.edf".to_string(),
+            sha256: "2".repeat(64),
+            fs: 128.0,
+            n_chan: 1,
+            n_samples: 2,
+        };
+        let first_signal = (vec![vec![1_i64, 2, 3]], 256.0);
+        let second_signal = (vec![vec![4_i64, 5]], 128.0);
+        let forward = CorpusManifest {
+            spec_version: "1.0".to_string(),
+            name: "first-location".to_string(),
+            version: "1".to_string(),
+            abir_identity: None,
+            file: vec![first_entry.clone(), second_entry.clone()],
+        };
+        let reversed = CorpusManifest {
+            spec_version: "1.0".to_string(),
+            name: "relocated-copy".to_string(),
+            version: "1".to_string(),
+            abir_identity: None,
+            file: vec![second_entry, first_entry],
+        };
+
+        let forward_id =
+            semantic_content_id(&forward, &[first_signal.clone(), second_signal.clone()])
+                .expect("semantic identity");
+        let reversed_id = semantic_content_id(&reversed, &[second_signal, first_signal])
+            .expect("semantic identity");
+
+        assert_eq!(forward_id, reversed_id);
+    }
+
+    #[test]
     fn integrity_mismatch_is_reported() {
         // Build a one-file corpus on disk whose pinned hash is wrong.
         let dir = crate::subprocess::ScratchDir::new("corpus_test").expect("scratch");
@@ -343,6 +647,7 @@ mod tests {
             spec_version: "1.0".to_string(),
             name: "t".to_string(),
             version: "1".to_string(),
+            abir_identity: None,
             file: vec![CorpusFileEntry {
                 path: "a.edf".to_string(),
                 sha256: bad,
@@ -374,6 +679,38 @@ mod tests {
     }
 
     #[test]
+    fn semantic_identity_mismatch_is_reported() {
+        let dir = crate::subprocess::ScratchDir::new("corpus_identity").expect("scratch");
+        let signal = vec![vec![0_i64, 1, -1, 2]];
+        let edf_bytes =
+            crate::subprocess::write_edf_bytes(&signal, 256.0).expect("fixture -> EDF");
+        std::fs::write(dir.join("a.edf"), &edf_bytes).expect("write EDF");
+        let manifest = CorpusManifest {
+            spec_version: "1.0".to_string(),
+            name: "identity-test".to_string(),
+            version: "1".to_string(),
+            abir_identity: Some(CorpusAbirIdentity {
+                schema: ABIR_IDENTITY_SCHEMA.to_string(),
+                content_id: "0".repeat(64),
+            }),
+            file: vec![CorpusFileEntry {
+                path: "a.edf".to_string(),
+                sha256: sha256_hex(&edf_bytes),
+                fs: 256.0,
+                n_chan: 1,
+                n_samples: 4,
+            }],
+        };
+
+        match verify_and_load(&manifest, &dir.path) {
+            Err(CorpusError::Semantic(detail)) => {
+                assert!(detail.contains("ContentId mismatch"));
+            }
+            other => panic!("expected semantic identity mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn shape_mismatch_is_reported() {
         let dir = crate::subprocess::ScratchDir::new("corpus_shape").expect("scratch");
         let sig = vec![vec![0i64, 1, -1, 2], vec![3, 4, 5, 6]];
@@ -384,6 +721,7 @@ mod tests {
             spec_version: "1.0".to_string(),
             name: "t".to_string(),
             version: "1".to_string(),
+            abir_identity: None,
             file: vec![CorpusFileEntry {
                 path: "a.edf".to_string(),
                 sha256: sha256_hex(&edf_bytes),

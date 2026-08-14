@@ -11,6 +11,10 @@ spec_version = "1.0"
 name = "ecs-smoke"
 version = "1.0.0"
 
+[abir_identity]
+schema = "org.quitetall.openecs.corpus-identity-projection-v1"
+content_id = "0d074e9141e35d42b37c1e7f706ee03f39f88e1bd6ab89304cd9d2864ac72d49"
+
 [[file]]
 path = "smoke/synthetic_a.edf"
 sha256 = "9a2ad884fb16d7c7a75162522fad33be7b60a780b631063197d747faa484feb9"
