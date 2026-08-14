@@ -2,7 +2,7 @@
 name = "open-eeg-codec-standard"
 version = "0.9.2"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.85"
 license = "Apache-2.0"
 description = "OpenECS — a universal, vendor-neutral Open EEG Codec Standard: grade any EEG codec (any language, via a file-based contract) against a hash-pinned corpus into one comparable verdict."
 repository = "https://github.com/Quitetall/OpenECS"
