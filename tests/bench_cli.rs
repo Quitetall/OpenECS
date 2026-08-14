@@ -85,6 +85,7 @@ fn emitted_manifest_carries_abir_semantic_identity() {
         .output()
         .expect("emit manifest");
     assert!(out.status.success(), "manifest emission succeeds");
+    assert!(out.stdout.ends_with(b"\n"), "manifest is line terminated");
     let text = String::from_utf8(out.stdout).expect("manifest is UTF-8");
     let manifest: CorpusManifest = toml::from_str(&text).expect("manifest parses");
     let identity = manifest

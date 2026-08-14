@@ -111,6 +111,10 @@ pub enum CorpusError {
     Semantic(String),
 }
 
+const RECORDING_ID_NAMESPACE: u8 = 1;
+const STREAM_ID_NAMESPACE: u8 = 2;
+const ATOM_ID_NAMESPACE: u8 = 3;
+
 impl fmt::Display for CorpusError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -256,9 +260,9 @@ pub fn semantic_content_id_from_payloads(
             .checked_mul(n_samples_u64)
             .and_then(|value| value.checked_mul(8))
             .ok_or_else(|| CorpusError::Semantic("payload byte count overflow".to_string()))?;
-        let atom_id = indexed_id::<AtomTag>(3, index)?;
-        let stream_id = indexed_id::<StreamTag>(2, index)?;
-        let recording_id = indexed_id::<RecordingTag>(1, index)?;
+        let atom_id = indexed_id::<AtomTag>(ATOM_ID_NAMESPACE, index)?;
+        let stream_id = indexed_id::<StreamTag>(STREAM_ID_NAMESPACE, index)?;
+        let recording_id = indexed_id::<RecordingTag>(RECORDING_ID_NAMESPACE, index)?;
         let payload = PayloadDescriptor::new(
             *payload_id,
             logical_bytes,
@@ -534,9 +538,13 @@ where
         let payload_ids: Vec<_> = graded
             .iter()
             .map(|(_, _, _, _, payload_id)| {
-                payload_id.expect("identity requested for every graded file")
+                payload_id.as_ref().copied().ok_or_else(|| {
+                    CorpusError::Semantic(
+                        "parallel grader omitted a requested payload identity".to_string(),
+                    )
+                })
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
         let observed = semantic_content_id_from_payloads(manifest, &payload_ids)?;
         verify_observed_content_id(manifest, &observed)?;
     }

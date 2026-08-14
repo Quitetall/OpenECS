@@ -664,6 +664,9 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
         }
     };
     print!("{output}");
+    if !output.ends_with('\n') {
+        println!();
+    }
     eprintln!(
         "emitted {} file entries from {}",
         manifest.file.len(),
