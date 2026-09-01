@@ -1,0 +1,174 @@
+{
+  "crate_version": "0.9.2",
+  "levels": [
+    {
+      "band_fidelity": {},
+      "level": "L",
+      "max_prd": 0.0,
+      "max_snr_loss": 0.0,
+      "min_cr": 0.8,
+      "min_r": 1.0,
+      "name": "Lossless"
+    },
+    {
+      "band_fidelity": {},
+      "level": "N",
+      "max_prd": 5.0,
+      "max_snr_loss": 2.0,
+      "min_cr": 1.0,
+      "min_r": 0.99,
+      "name": "Near-Lossless"
+    },
+    {
+      "band_fidelity": {
+        "alpha": {
+          "freq_range": [
+            8.0,
+            13.0
+          ],
+          "max_prd": 8.0,
+          "min_r": 0.96
+        },
+        "beta": {
+          "freq_range": [
+            13.0,
+            30.0
+          ],
+          "max_prd": 12.0,
+          "min_r": 0.93
+        },
+        "delta": {
+          "freq_range": [
+            0.5,
+            4.0
+          ],
+          "max_prd": 5.0,
+          "min_r": 0.98
+        },
+        "gamma": {
+          "freq_range": [
+            30.0,
+            50.0
+          ],
+          "max_prd": 20.0,
+          "min_r": 0.85
+        },
+        "theta": {
+          "freq_range": [
+            4.0,
+            8.0
+          ],
+          "max_prd": 7.0,
+          "min_r": 0.97
+        }
+      },
+      "level": "C",
+      "max_prd": 9.0,
+      "max_snr_loss": 3.0,
+      "min_cr": 20.0,
+      "min_r": 0.95,
+      "name": "Clinical"
+    },
+    {
+      "band_fidelity": {
+        "alpha": {
+          "freq_range": [
+            8.0,
+            13.0
+          ],
+          "max_prd": 15.0,
+          "min_r": 0.9
+        },
+        "beta": {
+          "freq_range": [
+            13.0,
+            30.0
+          ],
+          "max_prd": 25.0,
+          "min_r": 0.8
+        },
+        "delta": {
+          "freq_range": [
+            0.5,
+            4.0
+          ],
+          "max_prd": 10.0,
+          "min_r": 0.95
+        },
+        "gamma": {
+          "freq_range": [
+            30.0,
+            50.0
+          ],
+          "max_prd": 40.0,
+          "min_r": 0.6
+        },
+        "theta": {
+          "freq_range": [
+            4.0,
+            8.0
+          ],
+          "max_prd": 12.0,
+          "min_r": 0.93
+        }
+      },
+      "level": "M",
+      "max_prd": 20.0,
+      "max_snr_loss": 6.0,
+      "min_cr": 100.0,
+      "min_r": 0.85,
+      "name": "Monitoring"
+    },
+    {
+      "band_fidelity": {
+        "alpha": {
+          "freq_range": [
+            8.0,
+            13.0
+          ],
+          "max_prd": 30.0,
+          "min_r": 0.75
+        },
+        "beta": {
+          "freq_range": [
+            13.0,
+            30.0
+          ],
+          "max_prd": 40.0,
+          "min_r": 0.65
+        },
+        "delta": {
+          "freq_range": [
+            0.5,
+            4.0
+          ],
+          "max_prd": 20.0,
+          "min_r": 0.85
+        },
+        "gamma": {
+          "freq_range": [
+            30.0,
+            50.0
+          ],
+          "max_prd": 60.0,
+          "min_r": 0.4
+        },
+        "theta": {
+          "freq_range": [
+            4.0,
+            8.0
+          ],
+          "max_prd": 25.0,
+          "min_r": 0.8
+        }
+      },
+      "level": "A",
+      "max_prd": 40.0,
+      "max_snr_loss": 10.0,
+      "min_cr": 200.0,
+      "min_r": 0.7,
+      "name": "Alerting"
+    }
+  ],
+  "schema": "openecs.levels/v1"
+}

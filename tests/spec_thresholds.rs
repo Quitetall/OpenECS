@@ -199,3 +199,45 @@ fn rust_table_is_lncma_in_order() {
     let codes: Vec<char> = t.iter().map(|l| l.level).collect();
     assert_eq!(codes, vec!['L', 'N', 'C', 'M', 'A'], "tier order / membership");
 }
+
+/// `SPEC/levels.json` must equal what `levels()` produces right now.
+///
+/// WHY A COMMITTED COPY EXISTS AT ALL. `levels()` is the source of truth, but it
+/// is only readable by linking this crate. Charting, dashboards and graders
+/// written in other languages all need the same floors, and without a published
+/// artefact they re-type them — at which point a spec revision silently moves
+/// the grader and leaves every copy behind. `SPEC/levels.json` is that artefact
+/// and this test is what keeps it honest: change a floor without regenerating,
+/// and CI fails here rather than in someone's chart six weeks later.
+///
+/// Regenerate with `cargo run --bin openecs -- levels > SPEC/levels.json`.
+#[test]
+fn committed_levels_json_matches_the_table() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/SPEC/levels.json");
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
+        panic!("SPEC/levels.json is missing or unreadable ({e}); regenerate with \
+                `cargo run --bin openecs -- levels > SPEC/levels.json`")
+    });
+    let doc: serde_json::Value =
+        serde_json::from_str(&text).expect("SPEC/levels.json is not valid JSON");
+
+    assert_eq!(
+        doc["schema"], "openecs.levels/v1",
+        "SPEC/levels.json schema tag changed; consumers pin on this string"
+    );
+
+    // Compare the LEVELS payload structurally, not the whole document: the
+    // crate_version field legitimately moves on every release and would make
+    // this test fail for a reason that has nothing to do with a threshold.
+    let committed = doc
+        .get("levels")
+        .unwrap_or_else(|| panic!("SPEC/levels.json has no `levels` key"));
+    let live = serde_json::to_value(levels::levels()).expect("levels() serializes");
+
+    assert_eq!(
+        committed, &live,
+        "SPEC/levels.json is STALE — the tier table changed and the committed \
+         export was not regenerated. Run \
+         `cargo run --bin openecs -- levels > SPEC/levels.json`"
+    );
+}

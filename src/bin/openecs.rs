@@ -8,6 +8,8 @@
 //!   intervals + significance, a progress bar, and optional HTML report.
 //! - `verify-corpus` — check a corpus manifest's SHA-256 + shape pins.
 //! - `emit-corpus-manifest` — hash a directory of EDFs into a pinned manifest.
+//! - `levels` — print the OpenECS tier ladder as JSON (the machine-readable
+//!   export of `levels::levels()`, so downstream tooling never re-types a floor).
 //!
 //! Legacy form (preserved): `openecs <store|gzip|quantize> [FILE.edf]` grades
 //! the built-in fixture or an EDF and prints a single report.
@@ -109,6 +111,16 @@ enum Cmd {
     VerifyCorpus(CorpusArg),
     /// Walk a directory of *.edf files and print a pinned corpus manifest.
     EmitCorpusManifest(EmitArgs),
+    /// Print the tier ladder as JSON — the machine-readable export of the spec.
+    ///
+    /// EXISTS SO NOTHING ELSE RE-TYPES A FLOOR. `levels::levels()` is the single
+    /// source of truth for min_r / max_prd / min_cr, and every downstream
+    /// consumer (charts, dashboards, external graders in other languages) needs
+    /// those same numbers. Without an export they get copied, and a copied floor
+    /// is a floor that silently disagrees with the grader after the next spec
+    /// revision. `SPEC/levels.json` is this command's committed output and is
+    /// drift-checked by a test.
+    Levels,
 }
 
 #[derive(Args)]
@@ -205,6 +217,7 @@ fn main() -> ExitCode {
         "bench",
         "verify-corpus",
         "emit-corpus-manifest",
+        "levels",
         "help",
         "-h",
         "--help",
@@ -221,6 +234,30 @@ fn main() -> ExitCode {
         Cmd::Bench(a) => cmd_bench(a),
         Cmd::VerifyCorpus(a) => cmd_verify_corpus(&a.corpus_manifest),
         Cmd::EmitCorpusManifest(a) => cmd_emit_manifest(&a),
+        Cmd::Levels => cmd_levels(),
+    }
+}
+
+/// Print the tier ladder as JSON on stdout.
+///
+/// Wrapped in an object rather than emitted as a bare array so the payload can
+/// gain fields without breaking parsers, and so a consumer can assert which
+/// spec and crate version it graded against instead of guessing.
+fn cmd_levels() -> ExitCode {
+    let payload = serde_json::json!({
+        "schema": "openecs.levels/v1",
+        "crate_version": env!("CARGO_PKG_VERSION"),
+        "levels": open_eeg_codec_standard::levels::levels(),
+    });
+    match serde_json::to_string_pretty(&payload) {
+        Ok(t) => {
+            println!("{t}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("openecs: could not serialize levels: {e}");
+            ExitCode::from(5)
+        }
     }
 }
 
