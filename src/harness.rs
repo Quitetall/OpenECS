@@ -101,12 +101,7 @@ fn median(xs: &mut [f64]) -> f64 {
 /// `repeats` timed round trips (after one untimed warm-up when `repeats > 1`),
 /// so the MiB/s figure is stable enough to cite. `repeats <= 1` is the
 /// single-shot path [`run`] uses — no warm-up, identical cost to before.
-pub fn run_measured(
-    codec: &dyn Codec,
-    signal: &[Vec<i64>],
-    fs: f64,
-    repeats: usize,
-) -> EcsReport {
+pub fn run_measured(codec: &dyn Codec, signal: &[Vec<i64>], fs: f64, repeats: usize) -> EcsReport {
     let raw = raw_bytes(signal);
     let reps = repeats.max(1);
 
@@ -316,8 +311,10 @@ pub fn run_corpus(
 /// below-floor sentinel.
 pub fn summarize(codec: &str, per_file: &[(EcsReport, u64, u64)]) -> CorpusSummary {
     let n = per_file.len();
-    let cr_pairs: Vec<(u64, u64)> =
-        per_file.iter().map(|(_, raw, comp)| (*raw, (*comp).max(1))).collect();
+    let cr_pairs: Vec<(u64, u64)> = per_file
+        .iter()
+        .map(|(_, raw, comp)| (*raw, (*comp).max(1)))
+        .collect();
     let mean_cr = metrics::aggregate_cr(&cr_pairs);
     let sum_prd: f64 = per_file.iter().map(|(r, _, _)| r.prd).sum();
     let sum_r: f64 = per_file.iter().map(|(r, _, _)| r.r).sum();

@@ -48,8 +48,14 @@ fn build_submission() -> EcsSubmission {
         r.throughput_mibs = 0.0; // wall-clock dependent — normalized
     }
     EcsSubmission::new(
-        CodecIdentity { name: "store".to_string(), manifest_sha256: None },
-        CorpusIdentity { name: "golden-fixture".to_string(), version: "1.0.0".to_string() },
+        CodecIdentity {
+            name: "store".to_string(),
+            manifest_sha256: None,
+        },
+        CorpusIdentity {
+            name: "golden-fixture".to_string(),
+            version: "1.0.0".to_string(),
+        },
         reports,
         summary,
     )

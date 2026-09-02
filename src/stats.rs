@@ -40,11 +40,19 @@ pub struct Ci {
 pub fn bootstrap_ci(samples: &[f64], confidence: f64, n_boot: usize, seed: u64) -> Ci {
     let n = samples.len();
     if n == 0 {
-        return Ci { mean: 0.0, lo: 0.0, hi: 0.0 };
+        return Ci {
+            mean: 0.0,
+            lo: 0.0,
+            hi: 0.0,
+        };
     }
     let mean = samples.iter().sum::<f64>() / n as f64;
     if n == 1 || n_boot == 0 {
-        return Ci { mean, lo: mean, hi: mean };
+        return Ci {
+            mean,
+            lo: mean,
+            hi: mean,
+        };
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
@@ -147,7 +155,10 @@ mod tests {
         let a = vec![1.0; 10];
         let b = vec![0.0; 10];
         let p = sign_test(&a, &b);
-        assert!(p < 0.01, "all-positive sign test should be significant, got {p}");
+        assert!(
+            p < 0.01,
+            "all-positive sign test should be significant, got {p}"
+        );
         assert!((p - 2.0 * 0.5_f64.powi(10)).abs() < 1e-9);
 
         // Identical -> all ties -> no evidence -> p = 1.0.

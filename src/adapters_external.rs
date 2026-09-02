@@ -417,7 +417,13 @@ impl ExternalCodec {
             Ok(p) => p,
             Err(_) => return Vec::new(),
         };
-        wrap_envelope(&payload, n_chan as u32, n_samples as u32, self.sample_dtype, fs)
+        wrap_envelope(
+            &payload,
+            n_chan as u32,
+            n_samples as u32,
+            self.sample_dtype,
+            fs,
+        )
     }
 
     /// Decode an enveloped blob back to the per-channel signal, or
@@ -463,7 +469,8 @@ impl ExternalCodec {
                 // Reshape using the dtype the envelope recorded at encode
                 // time, not `self.sample_dtype`, so the two always agree.
                 let _ = dtype; // recorded == self.sample_dtype by construction
-                reshape_channel_major(&out, n_chan, n_samples, self.sample_dtype).unwrap_or_default()
+                reshape_channel_major(&out, n_chan, n_samples, self.sample_dtype)
+                    .unwrap_or_default()
             }
             OutputFormat::Ecs0 => deserialize(&out),
         }
@@ -576,8 +583,18 @@ mod tests {
         assert!(enc.iter().any(|a| a == "{output}"));
         let dec = default_decode_args();
         assert_eq!(dec[0], "decode");
-        for tok in ["{input}", "{output}", "{channels}", "{samples}", "{rate}", "{dtype}"] {
-            assert!(dec.iter().any(|a| a == tok), "decode template missing {tok}");
+        for tok in [
+            "{input}",
+            "{output}",
+            "{channels}",
+            "{samples}",
+            "{rate}",
+            "{dtype}",
+        ] {
+            assert!(
+                dec.iter().any(|a| a == tok),
+                "decode template missing {tok}"
+            );
         }
     }
 

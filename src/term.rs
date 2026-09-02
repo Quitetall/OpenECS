@@ -28,7 +28,11 @@ pub fn colors_on() -> bool {
 /// caller (the CLI) already decided based on the tty / `NO_COLOR`, so we must
 /// not let `console`'s own auto-detection override an explicit `true` (it
 /// would suppress ANSI when stdout is not a tty, e.g. under `cargo test`).
-fn paint(s: &str, color: bool, f: impl Fn(console::StyledObject<&str>) -> console::StyledObject<&str>) -> String {
+fn paint(
+    s: &str,
+    color: bool,
+    f: impl Fn(console::StyledObject<&str>) -> console::StyledObject<&str>,
+) -> String {
     if color {
         f(style(s).force_styling(true)).to_string()
     } else {
@@ -81,9 +85,20 @@ pub fn sparkline(vals: &[f64]) -> String {
     if vals.is_empty() {
         return String::new();
     }
-    let finite: Vec<f64> = vals.iter().map(|v| if v.is_finite() { *v } else { f64::NEG_INFINITY }).collect();
-    let lo = finite.iter().cloned().filter(|v| v.is_finite()).fold(f64::INFINITY, f64::min);
-    let hi = finite.iter().cloned().filter(|v| v.is_finite()).fold(f64::NEG_INFINITY, f64::max);
+    let finite: Vec<f64> = vals
+        .iter()
+        .map(|v| if v.is_finite() { *v } else { f64::NEG_INFINITY })
+        .collect();
+    let lo = finite
+        .iter()
+        .cloned()
+        .filter(|v| v.is_finite())
+        .fold(f64::INFINITY, f64::min);
+    let hi = finite
+        .iter()
+        .cloned()
+        .filter(|v| v.is_finite())
+        .fold(f64::NEG_INFINITY, f64::max);
     if !lo.is_finite() || !hi.is_finite() {
         return BLOCKS[0].to_string().repeat(vals.len());
     }
@@ -121,7 +136,11 @@ pub fn bar(frac: f64, width: usize) -> String {
 /// alignment.
 pub fn boxed(title: &str, body: &[String], color: bool) -> String {
     let title_w = measure_text_width(title);
-    let content_w = body.iter().map(|l| measure_text_width(l)).max().unwrap_or(0);
+    let content_w = body
+        .iter()
+        .map(|l| measure_text_width(l))
+        .max()
+        .unwrap_or(0);
     let inner = content_w.max(title_w).max(20);
 
     let titled = paint(title, color, |s| s.bold());
@@ -191,7 +210,12 @@ pub fn render_report(rep: &EcsReport, color: bool) -> String {
             .iter()
             .map(|b| b.band.chars().next().unwrap_or('?'))
             .collect();
-        body.push(format!("{}  {}  {}", dim("band R"), sparkline(&band_r), dim(&names)));
+        body.push(format!(
+            "{}  {}  {}",
+            dim("band R"),
+            sparkline(&band_r),
+            dim(&names)
+        ));
     }
     if !rep.violations.is_empty() {
         body.push(dim("to climb a tier:"));
@@ -215,9 +239,15 @@ pub fn render_report(rep: &EcsReport, color: bool) -> String {
 pub fn render_leaderboard(reports: &[&EcsReport], color: bool) -> String {
     let dim = |s: &str| paint(s, color, |x| x.dim());
     let mut s = String::new();
-    s.push_str(&paint("OpenECS leaderboard (best first)\n", color, |x| x.bold()));
-    s.push_str(&dim("  #  codec                  grade      CR     PRD%       R       QS\n"));
-    s.push_str(&dim("  ─────────────────────────────────────────────────────────────────\n"));
+    s.push_str(&paint("OpenECS leaderboard (best first)\n", color, |x| {
+        x.bold()
+    }));
+    s.push_str(&dim(
+        "  #  codec                  grade      CR     PRD%       R       QS\n",
+    ));
+    s.push_str(&dim(
+        "  ─────────────────────────────────────────────────────────────────\n",
+    ));
     if reports.is_empty() {
         s.push_str("  (no codecs)\n");
         return s;
@@ -323,7 +353,10 @@ mod tests {
     #[test]
     fn plain_report_has_no_ansi() {
         let out = render_report(&rep(), false);
-        assert!(!out.contains('\u{1b}'), "color=false must emit no ANSI escapes");
+        assert!(
+            !out.contains('\u{1b}'),
+            "color=false must emit no ANSI escapes"
+        );
         assert!(out.contains("ECS-L"));
         assert!(out.contains("store"));
         assert!(out.contains("ecs-smoke"));
@@ -334,7 +367,10 @@ mod tests {
     #[test]
     fn colored_report_has_ansi() {
         let out = render_report(&rep(), true);
-        assert!(out.contains('\u{1b}'), "color=true should emit ANSI escapes");
+        assert!(
+            out.contains('\u{1b}'),
+            "color=true should emit ANSI escapes"
+        );
     }
 
     #[test]

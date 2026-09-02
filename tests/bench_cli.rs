@@ -16,7 +16,10 @@ fn smoke_manifest() -> PathBuf {
 
 #[test]
 fn help_lists_subcommands() {
-    let out = Command::new(bin()).arg("--help").output().expect("run --help");
+    let out = Command::new(bin())
+        .arg("--help")
+        .output()
+        .expect("run --help");
     assert!(out.status.success());
     let text = String::from_utf8_lossy(&out.stdout);
     for sub in ["grade", "bench", "verify-corpus", "emit-corpus-manifest"] {
@@ -27,7 +30,10 @@ fn help_lists_subcommands() {
 #[test]
 fn legacy_form_still_works() {
     // `openecs gzip` (no subcommand) grades the synthetic fixture -> L -> exit 0.
-    let out = Command::new(bin()).arg("gzip").output().expect("run legacy");
+    let out = Command::new(bin())
+        .arg("gzip")
+        .output()
+        .expect("run legacy");
     assert!(out.status.success(), "legacy gzip should exit 0");
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("ECS-L"), "legacy output shows the grade");
@@ -44,10 +50,16 @@ fn bench_ranks_codecs_and_writes_report() {
         .arg(&report)
         .output()
         .expect("run bench");
-    assert!(out.status.success(), "bench of gzip over smoke corpus exits 0");
+    assert!(
+        out.status.success(),
+        "bench of gzip over smoke corpus exits 0"
+    );
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("rank"), "ranked table present");
-    assert!(text.contains("gzip") && text.contains("store"), "both codecs listed");
+    assert!(
+        text.contains("gzip") && text.contains("store"),
+        "both codecs listed"
+    );
     assert!(text.contains("mean R"), "CI column present");
 
     // The HTML report is a self-contained page with embedded SVG charts.

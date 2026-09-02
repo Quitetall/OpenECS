@@ -248,15 +248,9 @@ pub fn leaderboard(reports: &[EcsReport]) -> String {
         grade_rank(a.grade)
             .cmp(&grade_rank(b.grade))
             // Higher qs first.
-            .then(
-                b.qs.partial_cmp(&a.qs)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
+            .then(b.qs.partial_cmp(&a.qs).unwrap_or(std::cmp::Ordering::Equal))
             // Higher cr first.
-            .then(
-                b.cr.partial_cmp(&a.cr)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
+            .then(b.cr.partial_cmp(&a.cr).unwrap_or(std::cmp::Ordering::Equal))
             // Stable, deterministic final tie-break.
             .then_with(|| a.codec.cmp(&b.codec))
     });

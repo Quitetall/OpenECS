@@ -159,14 +159,7 @@ fn within(rust: f64, python: f64, tol: f64) -> bool {
     }
 }
 
-fn check(
-    out: &mut Vec<Divergence>,
-    fixture: &str,
-    metric: &str,
-    rust: f64,
-    python: f64,
-    tol: f64,
-) {
+fn check(out: &mut Vec<Divergence>, fixture: &str, metric: &str, rust: f64, python: f64, tol: f64) {
     if !within(rust, python, tol) {
         out.push(Divergence {
             fixture: fixture.to_string(),
@@ -195,8 +188,7 @@ fn load_golden() -> Golden {
             path.display()
         )
     });
-    serde_json::from_str(&raw)
-        .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()))
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()))
 }
 
 #[test]
@@ -215,7 +207,14 @@ fn metrics_match_python_golden() {
         check(&mut divergences, &fx.name, "prd", r_prd, fx.py_prd.0, TOL);
 
         let r_prdn = metrics::prdn(&fx.orig, &fx.recon);
-        check(&mut divergences, &fx.name, "prdn", r_prdn, fx.py_prdn.0, TOL);
+        check(
+            &mut divergences,
+            &fx.name,
+            "prdn",
+            r_prdn,
+            fx.py_prdn.0,
+            TOL,
+        );
 
         let r_pearson = metrics::pearson_r(&fx.orig, &fx.recon);
         check(
@@ -228,7 +227,14 @@ fn metrics_match_python_golden() {
         );
 
         let r_snr = metrics::snr_db(&fx.orig, &fx.recon);
-        check(&mut divergences, &fx.name, "snr_db", r_snr, fx.py_snr_db.0, TOL);
+        check(
+            &mut divergences,
+            &fx.name,
+            "snr_db",
+            r_snr,
+            fx.py_snr_db.0,
+            TOL,
+        );
 
         // Cross-check: the Rust prd/pearson must ALSO be within tolerance of
         // the SECOND reference implementation (the reference). This guards
@@ -264,9 +270,7 @@ fn metrics_match_python_golden() {
         }
 
         // Compression ratio — only on fixtures carrying byte counts.
-        if let (Some(raw), Some(comp), Some(py_cr)) =
-            (fx.raw_bytes, fx.comp_bytes, &fx.py_cr)
-        {
+        if let (Some(raw), Some(comp), Some(py_cr)) = (fx.raw_bytes, fx.comp_bytes, &fx.py_cr) {
             let r_cr = metrics::compression_ratio(raw, comp);
             check(
                 &mut divergences,

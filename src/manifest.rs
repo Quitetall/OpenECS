@@ -12,10 +12,10 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
+use crate::adapters_external::DEFAULT_TIMEOUT_SECS;
 use crate::adapters_external::{
     default_decode_args, default_encode_args, resolve_cmd, ExternalCodec, InputFormat, OutputFormat,
 };
-use crate::adapters_external::DEFAULT_TIMEOUT_SECS;
 use crate::subprocess::SampleDtype;
 
 /// Default `spec_version` when a manifest omits it.
@@ -186,7 +186,10 @@ mod tests {
         assert_eq!(m.codec.output_format, OutputFormat::Ecs0);
         assert_eq!(m.codec.timeout_secs, 1800);
         assert_eq!(m.codec.prefix_args, vec!["-m", "neural_lmq.cli"]);
-        assert_eq!(m.codec.env.get("CUDA_VISIBLE_DEVICES").map(|s| s.as_str()), Some("0"));
+        assert_eq!(
+            m.codec.env.get("CUDA_VISIBLE_DEVICES").map(|s| s.as_str()),
+            Some("0")
+        );
     }
 
     #[test]

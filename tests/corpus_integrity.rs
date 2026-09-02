@@ -34,22 +34,23 @@ fn smoke_corpus_verifies_and_loads() {
 
 #[test]
 fn smoke_corpus_grades_store_lossless() {
-    let manifest =
-        load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
+    let manifest = load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
     let files = verify_and_load(&manifest, corpora_dir()).expect("verifies");
 
     // The identity `store` codec must grade every smoke file ECS-L.
     let (reports, summary) = harness::run_corpus(&Store, &files);
     assert_eq!(reports.len(), 3);
     assert!(summary.all_bit_exact, "store is bit-exact on every file");
-    assert_eq!(summary.worst_grade, 'L', "store grades ECS-L across the corpus");
+    assert_eq!(
+        summary.worst_grade, 'L',
+        "store grades ECS-L across the corpus"
+    );
     assert!(reports.iter().all(|r| r.grade == 'L'));
 }
 
 #[test]
 fn parallel_grader_matches_sequential_and_ticks_progress() {
-    let manifest =
-        load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
+    let manifest = load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
 
     // Sequential reference (in-memory load + run_corpus).
     let files = verify_and_load(&manifest, corpora_dir()).expect("verifies");
@@ -63,7 +64,11 @@ fn parallel_grader_matches_sequential_and_ticks_progress() {
         })
         .expect("parallel grade");
 
-    assert_eq!(ticks.load(Ordering::Relaxed), 3, "progress ticks once per file");
+    assert_eq!(
+        ticks.load(Ordering::Relaxed),
+        3,
+        "progress ticks once per file"
+    );
     assert_eq!(par_reports.len(), seq_reports.len());
     // Grades + fidelity metrics must match exactly (throughput is wall-clock
     // and excluded). Reports come back in manifest order from both paths.
@@ -72,7 +77,10 @@ fn parallel_grader_matches_sequential_and_ticks_progress() {
         assert_eq!(p.cr, s.cr);
         assert_eq!(p.r, s.r);
         assert_eq!(p.prd, s.prd);
-        assert_eq!(p.dataset, "ecs-smoke", "parallel grader stamps the corpus name");
+        assert_eq!(
+            p.dataset, "ecs-smoke",
+            "parallel grader stamps the corpus name"
+        );
     }
     assert_eq!(par_summary.worst_grade, seq_summary.worst_grade);
     assert_eq!(par_summary.mean_cr, seq_summary.mean_cr);
@@ -85,7 +93,10 @@ fn parallel_grader_rejects_tampered_hash() {
         load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
     manifest.file[1].sha256 = "0".repeat(64);
     let err = grade_manifest_parallel(&manifest, corpora_dir(), &Store, 1, || {});
-    assert!(matches!(err, Err(CorpusError::Integrity { .. })), "integrity enforced in parallel");
+    assert!(
+        matches!(err, Err(CorpusError::Integrity { .. })),
+        "integrity enforced in parallel"
+    );
 }
 
 #[test]

@@ -120,11 +120,26 @@ pub fn levels() -> Vec<EcsLevel> {
     // ── C : Clinical ────────────────────────────────────────────────
     {
         let mut bands = BTreeMap::new();
-        bands.insert("delta".to_string(), BandRequirement::new(0.5, 4.0, 5.0, 0.98));
-        bands.insert("theta".to_string(), BandRequirement::new(4.0, 8.0, 7.0, 0.97));
-        bands.insert("alpha".to_string(), BandRequirement::new(8.0, 13.0, 8.0, 0.96));
-        bands.insert("beta".to_string(), BandRequirement::new(13.0, 30.0, 12.0, 0.93));
-        bands.insert("gamma".to_string(), BandRequirement::new(30.0, 50.0, 20.0, 0.85));
+        bands.insert(
+            "delta".to_string(),
+            BandRequirement::new(0.5, 4.0, 5.0, 0.98),
+        );
+        bands.insert(
+            "theta".to_string(),
+            BandRequirement::new(4.0, 8.0, 7.0, 0.97),
+        );
+        bands.insert(
+            "alpha".to_string(),
+            BandRequirement::new(8.0, 13.0, 8.0, 0.96),
+        );
+        bands.insert(
+            "beta".to_string(),
+            BandRequirement::new(13.0, 30.0, 12.0, 0.93),
+        );
+        bands.insert(
+            "gamma".to_string(),
+            BandRequirement::new(30.0, 50.0, 20.0, 0.85),
+        );
         out.push(EcsLevel {
             name: "Clinical".to_string(),
             level: 'C',
@@ -139,11 +154,26 @@ pub fn levels() -> Vec<EcsLevel> {
     // ── M : Monitoring ──────────────────────────────────────────────
     {
         let mut bands = BTreeMap::new();
-        bands.insert("delta".to_string(), BandRequirement::new(0.5, 4.0, 10.0, 0.95));
-        bands.insert("theta".to_string(), BandRequirement::new(4.0, 8.0, 12.0, 0.93));
-        bands.insert("alpha".to_string(), BandRequirement::new(8.0, 13.0, 15.0, 0.90));
-        bands.insert("beta".to_string(), BandRequirement::new(13.0, 30.0, 25.0, 0.80));
-        bands.insert("gamma".to_string(), BandRequirement::new(30.0, 50.0, 40.0, 0.60));
+        bands.insert(
+            "delta".to_string(),
+            BandRequirement::new(0.5, 4.0, 10.0, 0.95),
+        );
+        bands.insert(
+            "theta".to_string(),
+            BandRequirement::new(4.0, 8.0, 12.0, 0.93),
+        );
+        bands.insert(
+            "alpha".to_string(),
+            BandRequirement::new(8.0, 13.0, 15.0, 0.90),
+        );
+        bands.insert(
+            "beta".to_string(),
+            BandRequirement::new(13.0, 30.0, 25.0, 0.80),
+        );
+        bands.insert(
+            "gamma".to_string(),
+            BandRequirement::new(30.0, 50.0, 40.0, 0.60),
+        );
         out.push(EcsLevel {
             name: "Monitoring".to_string(),
             level: 'M',
@@ -158,11 +188,26 @@ pub fn levels() -> Vec<EcsLevel> {
     // ── A : Alerting ────────────────────────────────────────────────
     {
         let mut bands = BTreeMap::new();
-        bands.insert("delta".to_string(), BandRequirement::new(0.5, 4.0, 20.0, 0.85));
-        bands.insert("theta".to_string(), BandRequirement::new(4.0, 8.0, 25.0, 0.80));
-        bands.insert("alpha".to_string(), BandRequirement::new(8.0, 13.0, 30.0, 0.75));
-        bands.insert("beta".to_string(), BandRequirement::new(13.0, 30.0, 40.0, 0.65));
-        bands.insert("gamma".to_string(), BandRequirement::new(30.0, 50.0, 60.0, 0.40));
+        bands.insert(
+            "delta".to_string(),
+            BandRequirement::new(0.5, 4.0, 20.0, 0.85),
+        );
+        bands.insert(
+            "theta".to_string(),
+            BandRequirement::new(4.0, 8.0, 25.0, 0.80),
+        );
+        bands.insert(
+            "alpha".to_string(),
+            BandRequirement::new(8.0, 13.0, 30.0, 0.75),
+        );
+        bands.insert(
+            "beta".to_string(),
+            BandRequirement::new(13.0, 30.0, 40.0, 0.65),
+        );
+        bands.insert(
+            "gamma".to_string(),
+            BandRequirement::new(30.0, 50.0, 60.0, 0.40),
+        );
         out.push(EcsLevel {
             name: "Alerting".to_string(),
             level: 'A',

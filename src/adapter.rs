@@ -139,7 +139,8 @@ pub fn deserialize(buf: &[u8]) -> Vec<Vec<i64>> {
 /// guards a genuinely unreachable I/O error on an in-memory writer.
 pub fn gzip_compress(data: &[u8]) -> Vec<u8> {
     let mut enc = GzEncoder::new(Vec::new(), Compression::default());
-    enc.write_all(data).expect("gzip write to Vec is infallible");
+    enc.write_all(data)
+        .expect("gzip write to Vec is infallible");
     enc.finish().expect("gzip finish on Vec is infallible")
 }
 
@@ -272,12 +273,7 @@ mod tests {
         let signal = fixture();
         let blob = codec.encode(&signal, 256.0);
         let back = codec.decode(&blob);
-        assert_eq!(
-            back,
-            signal,
-            "{} failed bit-exact round trip",
-            codec.name()
-        );
+        assert_eq!(back, signal, "{} failed bit-exact round trip", codec.name());
         assert!(
             codec.declared_lossless(),
             "{} reference adapter should declare lossless",

@@ -339,7 +339,10 @@ mod tests {
         // Identical reconstruction => PRD exactly 0, R exactly 1, for every
         // file, under both lossless reference adapters.
         let files = corpus();
-        for pts in [rate_distortion(&Store, &files), rate_distortion(&Gzip, &files)] {
+        for pts in [
+            rate_distortion(&Store, &files),
+            rate_distortion(&Gzip, &files),
+        ] {
             assert_eq!(pts.len(), files.len());
             for p in &pts {
                 assert_eq!(p.prd, 0.0, "lossless codec must have prd 0");
@@ -369,7 +372,10 @@ mod tests {
     #[test]
     fn rd_deterministic() {
         let files = corpus();
-        assert_eq!(rate_distortion(&Store, &files), rate_distortion(&Store, &files));
+        assert_eq!(
+            rate_distortion(&Store, &files),
+            rate_distortion(&Store, &files)
+        );
     }
 
     #[test]
@@ -440,10 +446,7 @@ mod tests {
     fn throughput_reports_finite_rates() {
         let files = corpus();
         let t = throughput(&Gzip, &files);
-        let expected_raw: u64 = files
-            .iter()
-            .map(|(s, _)| serialize(s).len() as u64)
-            .sum();
+        let expected_raw: u64 = files.iter().map(|(s, _)| serialize(s).len() as u64).sum();
         assert_eq!(t.raw_bytes, expected_raw);
         assert!(t.encode_mibs.is_finite());
         assert!(t.decode_mibs.is_finite());
@@ -482,7 +485,10 @@ mod tests {
         let files = corpus();
         let summary = corpus_summary(&Gzip, &files);
         assert_eq!(summary.n_files, files.len());
-        assert!(summary.all_bit_exact, "gzip is lossless on synthetic corpus");
+        assert!(
+            summary.all_bit_exact,
+            "gzip is lossless on synthetic corpus"
+        );
         assert_eq!(summary.worst_grade, 'L');
         assert_eq!(summary.mean_prd, 0.0);
         assert_eq!(summary.mean_r, 1.0);

@@ -36,7 +36,10 @@ fn color(i: usize) -> RGBColor {
 /// A per-band R + PRD block-bar view of one report (for `--charts`).
 pub fn ascii_per_band(rep: &EcsReport, width: usize) -> String {
     let mut s = String::new();
-    s.push_str(&format!("per-band fidelity — {} on {}\n", rep.codec, rep.dataset));
+    s.push_str(&format!(
+        "per-band fidelity — {} on {}\n",
+        rep.codec, rep.dataset
+    ));
     for b in &rep.per_band {
         // R in [0,1] directly; PRD shown as a fraction of a 40% reference.
         let r_bar = crate::term::bar(b.r.clamp(0.0, 1.0), width);
@@ -69,7 +72,9 @@ pub fn ascii_rd_scatter(points: &[(f32, f32)]) -> String {
 fn svg_canvas(
     w: u32,
     h: u32,
-    f: impl FnOnce(&DrawingArea<SVGBackend, plotters::coord::Shift>) -> Result<(), Box<dyn std::error::Error>>,
+    f: impl FnOnce(
+        &DrawingArea<SVGBackend, plotters::coord::Shift>,
+    ) -> Result<(), Box<dyn std::error::Error>>,
 ) -> String {
     let mut buf = String::new();
     {
@@ -127,20 +132,34 @@ pub fn svg_rd_scatter(series: &[(String, Vec<(f64, f64)>)]) -> String {
         * 1.1;
     svg_canvas(720, 400, move |root| {
         let mut chart = ChartBuilder::on(root)
-            .caption("Rate–distortion (CR vs PRD%) — top-left is best", ("sans-serif", 16))
+            .caption(
+                "Rate–distortion (CR vs PRD%) — top-left is best",
+                ("sans-serif", 16),
+            )
             .margin(12)
             .x_label_area_size(40)
             .y_label_area_size(50)
             .build_cartesian_2d(0.0..x_max, 0.0..y_max)?;
-        chart.configure_mesh().x_desc("compression ratio").y_desc("PRD %").draw()?;
+        chart
+            .configure_mesh()
+            .x_desc("compression ratio")
+            .y_desc("PRD %")
+            .draw()?;
         for (i, (name, pts)) in series.iter().enumerate() {
             let c = color(i);
             chart
-                .draw_series(pts.iter().map(|(x, y)| Circle::new((*x, *y), 4, c.filled())))?
+                .draw_series(
+                    pts.iter()
+                        .map(|(x, y)| Circle::new((*x, *y), 4, c.filled())),
+                )?
                 .label(name.clone())
                 .legend(move |(x, y)| Circle::new((x, y), 4, c.filled()));
         }
-        chart.configure_series_labels().background_style(WHITE).border_style(BLACK).draw()?;
+        chart
+            .configure_series_labels()
+            .background_style(WHITE)
+            .border_style(BLACK)
+            .draw()?;
         Ok(())
     })
 }
@@ -176,7 +195,11 @@ mod tests {
 
     #[test]
     fn svg_outputs_are_wellformed() {
-        let bars = svg_codec_bars("CR by codec", "CR", &[("store".into(), 1.0), ("gzip".into(), 3.4)]);
+        let bars = svg_codec_bars(
+            "CR by codec",
+            "CR",
+            &[("store".into(), 1.0), ("gzip".into(), 3.4)],
+        );
         assert!(bars.contains("<svg"), "bar chart is SVG");
         assert!(bars.contains("</svg>"));
         let scatter = svg_rd_scatter(&[("gzip".into(), vec![(3.4, 0.0), (2.1, 1.2)])]);

@@ -270,12 +270,9 @@ pub fn reshape_channel_major(
         let mut chan = Vec::with_capacity(per_chan);
         for _ in 0..per_chan {
             let v = match dtype {
-                SampleDtype::I16 => {
-                    i16::from_le_bytes([raw[pos], raw[pos + 1]]) as i64
-                }
+                SampleDtype::I16 => i16::from_le_bytes([raw[pos], raw[pos + 1]]) as i64,
                 SampleDtype::I32 => {
-                    i32::from_le_bytes([raw[pos], raw[pos + 1], raw[pos + 2], raw[pos + 3]])
-                        as i64
+                    i32::from_le_bytes([raw[pos], raw[pos + 1], raw[pos + 2], raw[pos + 3]]) as i64
                 }
                 SampleDtype::I64 => i64::from_le_bytes([
                     raw[pos],

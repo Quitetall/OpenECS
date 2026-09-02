@@ -75,6 +75,11 @@ fn main() {
         println!("n_chan = {n_chan}");
         println!("n_samples = {n_samp}");
         println!();
-        eprintln!("wrote {} ({} bytes, sha {})", path.display(), edf.len(), &sha[..12]);
+        eprintln!(
+            "wrote {} ({} bytes, sha {})",
+            path.display(),
+            edf.len(),
+            &sha[..12]
+        );
     }
 }

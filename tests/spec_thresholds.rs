@@ -197,7 +197,11 @@ fn l_tier_invariants() {
 fn rust_table_is_lncma_in_order() {
     let t = levels::levels();
     let codes: Vec<char> = t.iter().map(|l| l.level).collect();
-    assert_eq!(codes, vec!['L', 'N', 'C', 'M', 'A'], "tier order / membership");
+    assert_eq!(
+        codes,
+        vec!['L', 'N', 'C', 'M', 'A'],
+        "tier order / membership"
+    );
 }
 
 /// `SPEC/levels.json` must equal what `levels()` produces right now.
@@ -215,8 +219,10 @@ fn rust_table_is_lncma_in_order() {
 fn committed_levels_json_matches_the_table() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/SPEC/levels.json");
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("SPEC/levels.json is missing or unreadable ({e}); regenerate with \
-                `cargo run --bin openecs -- levels > SPEC/levels.json`")
+        panic!(
+            "SPEC/levels.json is missing or unreadable ({e}); regenerate with \
+                `cargo run --bin openecs -- levels > SPEC/levels.json`"
+        )
     });
     let doc: serde_json::Value =
         serde_json::from_str(&text).expect("SPEC/levels.json is not valid JSON");

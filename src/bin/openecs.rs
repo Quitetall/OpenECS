@@ -169,7 +169,12 @@ struct BenchArgs {
     #[arg(long, value_name = "K.toml")]
     corpus_manifest: PathBuf,
     /// Comma-separated built-in baselines to grade alongside the codec.
-    #[arg(long, value_delimiter = ',', default_value = "store,gzip", value_name = "a,b")]
+    #[arg(
+        long,
+        value_delimiter = ',',
+        default_value = "store,gzip",
+        value_name = "a,b"
+    )]
     baselines: Vec<String>,
     /// Timed round trips per file for the median-throughput measurement.
     #[arg(long, default_value_t = 3, value_name = "N")]
@@ -224,7 +229,10 @@ fn main() -> ExitCode {
         "-V",
         "--version",
     ];
-    let is_clap = args.get(1).map(|s| SUBS.contains(&s.as_str())).unwrap_or(false);
+    let is_clap = args
+        .get(1)
+        .map(|s| SUBS.contains(&s.as_str()))
+        .unwrap_or(false);
     if !is_clap {
         // Legacy `openecs <codec> [file.edf]` (or no args -> synthetic).
         return cmd_legacy(&args[1..]);
@@ -277,7 +285,13 @@ fn build_builtin(name: &str) -> Option<(Box<dyn Codec + Sync>, CodecIdentity)> {
         "quantize" => Box::new(Quantize { step: 8 }),
         _ => return None,
     };
-    Some((codec, CodecIdentity { name: name.to_string(), manifest_sha256: None }))
+    Some((
+        codec,
+        CodecIdentity {
+            name: name.to_string(),
+            manifest_sha256: None,
+        },
+    ))
 }
 
 /// Resolve the codec under test: a manifest-defined external codec takes
@@ -305,7 +319,10 @@ fn resolve_target(
             }
         };
         let sha = std::fs::read(path).map(|b| sha256_hex(&b)).ok();
-        let id = CodecIdentity { name: codec.name().to_string(), manifest_sha256: sha };
+        let id = CodecIdentity {
+            name: codec.name().to_string(),
+            manifest_sha256: sha,
+        };
         return Ok((Box::new(codec), id));
     }
     build_builtin(builtin).ok_or_else(|| {
@@ -328,9 +345,11 @@ fn grade_corpus_with_progress(
     let pb = if show {
         let pb = ProgressBar::new(manifest.file.len() as u64);
         pb.set_style(
-            ProgressStyle::with_template("{prefix:>12} [{bar:28.cyan/blue}] {pos:>4}/{len} {eta:>5}")
-                .unwrap()
-                .progress_chars("█▉ "),
+            ProgressStyle::with_template(
+                "{prefix:>12} [{bar:28.cyan/blue}] {pos:>4}/{len} {eta:>5}",
+            )
+            .unwrap()
+            .progress_chars("█▉ "),
         );
         pb.set_prefix(label.to_string());
         pb
@@ -383,8 +402,10 @@ fn cmd_grade(a: GradeArgs) -> ExitCode {
         let ranked: Vec<&EcsReport> = reports.iter().collect();
         println!("\n{}", term::render_leaderboard(&ranked, color));
         if a.charts {
-            let pts: Vec<(f32, f32)> =
-                reports.iter().map(|r| (r.cr as f32, r.prd as f32)).collect();
+            let pts: Vec<(f32, f32)> = reports
+                .iter()
+                .map(|r| (r.cr as f32, r.prd as f32))
+                .collect();
             println!("{}", charts::ascii_rd_scatter(&pts));
         }
         if let Some(dir) = &a.dump_recon {
@@ -399,7 +420,10 @@ fn cmd_grade(a: GradeArgs) -> ExitCode {
         }
         let submission = EcsSubmission::new(
             codec_id,
-            CorpusIdentity { name: manifest.name.clone(), version: manifest.version.clone() },
+            CorpusIdentity {
+                name: manifest.name.clone(),
+                version: manifest.version.clone(),
+            },
             reports,
             summary.clone(),
         );
@@ -416,7 +440,11 @@ fn cmd_grade(a: GradeArgs) -> ExitCode {
                 return ExitCode::from(3);
             }
         },
-        None => (synthetic_signal(4, 512, 256.0), 256.0, "(synthetic)".to_string()),
+        None => (
+            synthetic_signal(4, 512, 256.0),
+            256.0,
+            "(synthetic)".to_string(),
+        ),
     };
     let mut report = harness::run_measured(codec.as_ref(), &signal, fs, a.repeat);
     report.dataset = dataset.clone();
@@ -430,7 +458,10 @@ fn cmd_grade(a: GradeArgs) -> ExitCode {
         reports.iter_mut().for_each(|r| r.dataset = dataset.clone());
         let submission = EcsSubmission::new(
             codec_id,
-            CorpusIdentity { name: dataset, version: "n/a".to_string() },
+            CorpusIdentity {
+                name: dataset,
+                version: "n/a".to_string(),
+            },
             reports,
             summary,
         );
@@ -452,11 +483,13 @@ fn cmd_bench(a: BenchArgs) -> ExitCode {
     };
     let base = manifest_base(&a.corpus_manifest);
 
-    let (target, target_id) =
-        match resolve_target(a.codec_manifest.as_deref(), a.codec.as_deref().unwrap_or("store")) {
-            Ok(v) => v,
-            Err(code) => return code,
-        };
+    let (target, target_id) = match resolve_target(
+        a.codec_manifest.as_deref(),
+        a.codec.as_deref().unwrap_or("store"),
+    ) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
 
     // Codec set: the target first, then the requested baselines (de-duped).
     let mut codecs: Vec<(Box<dyn Codec + Sync>, CodecIdentity)> = vec![(target, target_id.clone())];
@@ -498,7 +531,10 @@ fn cmd_bench(a: BenchArgs) -> ExitCode {
         };
         subs.push(EcsSubmission::new(
             id.clone(),
-            CorpusIdentity { name: manifest.name.clone(), version: manifest.version.clone() },
+            CorpusIdentity {
+                name: manifest.name.clone(),
+                version: manifest.version.clone(),
+            },
             reports,
             summary,
         ));
@@ -509,10 +545,17 @@ fn cmd_bench(a: BenchArgs) -> ExitCode {
     if a.charts {
         let series: Vec<(String, Vec<(f64, f64)>)> = subs
             .iter()
-            .map(|s| (s.codec.name.clone(), s.reports.iter().map(|r| (r.cr, r.prd)).collect()))
+            .map(|s| {
+                (
+                    s.codec.name.clone(),
+                    s.reports.iter().map(|r| (r.cr, r.prd)).collect(),
+                )
+            })
             .collect();
-        let pts: Vec<(f32, f32)> =
-            series.iter().flat_map(|(_, p)| p.iter().map(|(x, y)| (*x as f32, *y as f32))).collect();
+        let pts: Vec<(f32, f32)> = series
+            .iter()
+            .flat_map(|(_, p)| p.iter().map(|(x, y)| (*x as f32, *y as f32)))
+            .collect();
         println!("\n{}", charts::ascii_rd_scatter(&pts));
     }
 
@@ -541,17 +584,32 @@ fn render_bench_table(subs: &[EcsSubmission], target: &str, color: bool) -> Stri
         let (sa, sb) = (&subs[a].summary, &subs[b].summary);
         grade_rank(sa.worst_grade)
             .cmp(&grade_rank(sb.worst_grade))
-            .then(sb.mean_cr.partial_cmp(&sa.mean_cr).unwrap_or(std::cmp::Ordering::Equal))
+            .then(
+                sb.mean_cr
+                    .partial_cmp(&sa.mean_cr)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
     });
 
     // Per-file R series per codec (for CI + significance).
-    let r_series: Vec<Vec<f64>> =
-        subs.iter().map(|s| s.reports.iter().map(|r| r.r).collect()).collect();
+    let r_series: Vec<Vec<f64>> = subs
+        .iter()
+        .map(|s| s.reports.iter().map(|r| r.r).collect())
+        .collect();
     // Strongest baseline = best-ranked non-target codec.
-    let best_baseline = order.iter().copied().find(|&i| subs[i].codec.name != target);
+    let best_baseline = order
+        .iter()
+        .copied()
+        .find(|&i| subs[i].codec.name != target);
 
     let mut s = String::new();
-    let bold = |t: &str| if color { console::style(t).bold().force_styling(true).to_string() } else { t.to_string() };
+    let bold = |t: &str| {
+        if color {
+            console::style(t).bold().force_styling(true).to_string()
+        } else {
+            t.to_string()
+        }
+    };
     s.push_str(&bold(
         "  rank  codec                  grade   pooled CR   mean R (95% CI)             PRD%   p vs base\n",
     ));
@@ -586,7 +644,9 @@ fn render_bench_table(subs: &[EcsSubmission], target: &str, color: bool) -> Stri
             pval,
         ));
     }
-    s.push_str("\n  * codec under test · p = paired sign-test on per-file R vs the strongest baseline\n");
+    s.push_str(
+        "\n  * codec under test · p = paired sign-test on per-file R vs the strongest baseline\n",
+    );
     s
 }
 
@@ -601,7 +661,12 @@ fn cmd_verify_corpus(path: &Path) -> ExitCode {
         }
     };
     let base = manifest_base(path);
-    println!("verifying corpus {} v{} ({} files)", manifest.name, manifest.version, manifest.file.len());
+    println!(
+        "verifying corpus {} v{} ({} files)",
+        manifest.name,
+        manifest.version,
+        manifest.file.len()
+    );
     match corpus::verify_and_load(&manifest, base) {
         Ok(files) => {
             for (entry, (sig, _)) in manifest.file.iter().zip(&files) {
@@ -653,7 +718,10 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
         let n_chan = sig.channels.len();
         let n_samples = sig.channels.first().map(|c| c.len()).unwrap_or(0);
         if n_chan == 0 || !sig.channels.iter().all(|c| c.len() == n_samples) {
-            eprintln!("warning: skip {} (empty or ragged channels)", path.display());
+            eprintln!(
+                "warning: skip {} (empty or ragged channels)",
+                path.display()
+            );
             continue;
         }
         let rel = path.strip_prefix(&a.root).unwrap_or(path);
@@ -730,7 +798,11 @@ fn cmd_legacy(args: &[String]) -> ExitCode {
                 return ExitCode::from(3);
             }
         },
-        None => (synthetic_signal(4, 512, 256.0), 256.0, "(synthetic)".to_string()),
+        None => (
+            synthetic_signal(4, 512, 256.0),
+            256.0,
+            "(synthetic)".to_string(),
+        ),
     };
 
     let codec: Box<dyn Codec> = match codec_name.as_str() {

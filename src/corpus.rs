@@ -380,8 +380,8 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 /// **major** differs from this grader's (spec §11).
 pub fn load_corpus_manifest<P: AsRef<Path>>(path: P) -> Result<CorpusManifest, CorpusError> {
     let p = path.as_ref();
-    let text = std::fs::read_to_string(p)
-        .map_err(|e| CorpusError::Io(p.display().to_string(), e))?;
+    let text =
+        std::fs::read_to_string(p).map_err(|e| CorpusError::Io(p.display().to_string(), e))?;
     let manifest: CorpusManifest = toml::from_str(&text).map_err(CorpusError::Parse)?;
     // Accept this major or older; refuse a newer major (see manifest loader).
     match crate::spec_major(&manifest.spec_version) {
@@ -409,8 +409,7 @@ pub fn verify_and_load<P: AsRef<Path>>(
         let full: PathBuf = base.join(&entry.path);
 
         // 1. Integrity: bytes must hash to the pinned digest.
-        let bytes =
-            std::fs::read(&full).map_err(|e| CorpusError::Io(entry.path.clone(), e))?;
+        let bytes = std::fs::read(&full).map_err(|e| CorpusError::Io(entry.path.clone(), e))?;
         let got = sha256_hex(&bytes);
         if !got.eq_ignore_ascii_case(&entry.sha256) {
             return Err(CorpusError::Integrity {
@@ -422,8 +421,7 @@ pub fn verify_and_load<P: AsRef<Path>>(
 
         // 2. Decode + shape: channel count, per-channel length, and rate
         //    must match the manifest.
-        let signal =
-            edf::read_edf(&full).map_err(|e| CorpusError::Edf(entry.path.clone(), e))?;
+        let signal = edf::read_edf(&full).map_err(|e| CorpusError::Edf(entry.path.clone(), e))?;
         check_shape(entry, &signal)?;
         out.push((signal.channels, signal.fs));
     }
@@ -501,8 +499,7 @@ where
             let full = base.join(&entry.path);
 
             // Integrity: bytes must hash to the pinned digest.
-            let bytes =
-                std::fs::read(&full).map_err(|e| CorpusError::Io(entry.path.clone(), e))?;
+            let bytes = std::fs::read(&full).map_err(|e| CorpusError::Io(entry.path.clone(), e))?;
             let got = sha256_hex(&bytes);
             if !got.eq_ignore_ascii_case(&entry.sha256) {
                 return Err(CorpusError::Integrity {
@@ -642,8 +639,7 @@ mod tests {
         let dir = crate::subprocess::ScratchDir::new("corpus_test").expect("scratch");
         // A minimal valid EDF written via the shared writer.
         let sig = vec![vec![0i64, 1, -1, 2], vec![3, 4, 5, 6]];
-        let edf_bytes =
-            crate::subprocess::write_edf_bytes(&sig, 256.0).expect("fixture -> EDF");
+        let edf_bytes = crate::subprocess::write_edf_bytes(&sig, 256.0).expect("fixture -> EDF");
         let edf_path = dir.join("a.edf");
         std::fs::write(&edf_path, &edf_bytes).expect("write edf");
 
@@ -690,8 +686,7 @@ mod tests {
     fn semantic_identity_mismatch_is_reported() {
         let dir = crate::subprocess::ScratchDir::new("corpus_identity").expect("scratch");
         let signal = vec![vec![0_i64, 1, -1, 2]];
-        let edf_bytes =
-            crate::subprocess::write_edf_bytes(&signal, 256.0).expect("fixture -> EDF");
+        let edf_bytes = crate::subprocess::write_edf_bytes(&signal, 256.0).expect("fixture -> EDF");
         std::fs::write(dir.join("a.edf"), &edf_bytes).expect("write EDF");
         let manifest = CorpusManifest {
             spec_version: "1.0".to_string(),
@@ -722,8 +717,7 @@ mod tests {
     fn shape_mismatch_is_reported() {
         let dir = crate::subprocess::ScratchDir::new("corpus_shape").expect("scratch");
         let sig = vec![vec![0i64, 1, -1, 2], vec![3, 4, 5, 6]];
-        let edf_bytes =
-            crate::subprocess::write_edf_bytes(&sig, 256.0).expect("fixture -> EDF");
+        let edf_bytes = crate::subprocess::write_edf_bytes(&sig, 256.0).expect("fixture -> EDF");
         std::fs::write(dir.join("a.edf"), &edf_bytes).expect("write");
         let m = CorpusManifest {
             spec_version: "1.0".to_string(),

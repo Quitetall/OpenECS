@@ -125,11 +125,16 @@ output_format = "ecs0"
     std::fs::write(&manifest_path, manifest_text).expect("write manifest");
 
     let manifest = load_codec_manifest(&manifest_path).expect("manifest loads");
-    let codec = manifest.into_adapter().expect("adapter resolves (`sh` on PATH)");
+    let codec = manifest
+        .into_adapter()
+        .expect("adapter resolves (`sh` on PATH)");
 
     let sig = signal();
     let rep = harness::run(&codec, &sig, 256.0);
-    assert!(rep.bit_exact, "manifest-driven gzip codec must be bit-exact");
+    assert!(
+        rep.bit_exact,
+        "manifest-driven gzip codec must be bit-exact"
+    );
     assert_eq!(rep.grade, 'L');
     assert_eq!(codec.name(), "gzip-ext");
 }

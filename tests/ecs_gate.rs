@@ -87,7 +87,10 @@ fn gzip_grades_lossless_even_with_modest_cr() {
     let sig = signal(4, 256, 256.0);
     let rep = harness::run(&Gzip, &sig, 256.0);
     assert!(rep.bit_exact, "gzip must be bit-exact");
-    assert_eq!(rep.grade, 'L', "gzip lossless must grade L regardless of CR");
+    assert_eq!(
+        rep.grade, 'L',
+        "gzip lossless must grade L regardless of CR"
+    );
     // CR is whatever miniz_oxide achieves; losslessness does not depend on
     // it (only on clearing the 0.8 no-expansion floor).
     assert!(rep.cr >= 0.8, "gzip cr {} below L floor", rep.cr);
@@ -117,7 +120,8 @@ fn lossy_codec_is_never_graded_lossless() {
         .iter()
         .map(|b| (b.band.clone(), b.r, b.prd))
         .collect();
-    let regraded = open_eeg_codec_standard::levels::grade(rep.r, rep.prd, rep.cr, rep.snr_db, &band_triples);
+    let regraded =
+        open_eeg_codec_standard::levels::grade(rep.r, rep.prd, rep.cr, rep.snr_db, &band_triples);
     assert_eq!(
         regraded.grade, rep.grade,
         "harness grade must match re-grading its own metrics"
@@ -218,7 +222,8 @@ fn report_serializes_round_trip() {
     let sig = signal(2, 128, 256.0);
     let rep = harness::run(&Store, &sig, 256.0);
     let json = rep.to_json();
-    let back = open_eeg_codec_standard::report::EcsReport::from_json(&json).expect("report JSON round-trips");
+    let back = open_eeg_codec_standard::report::EcsReport::from_json(&json)
+        .expect("report JSON round-trips");
     assert_eq!(back, rep);
     assert_eq!(back.grade, 'L');
 }

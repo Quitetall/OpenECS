@@ -250,10 +250,7 @@ mod tests {
         let x = make_signal(128, fs);
         let out = per_band_fidelity(&x, &x, fs);
         let got: Vec<String> = out.into_iter().map(|(n, ..)| n).collect();
-        let want: Vec<String> = CLINICAL_BANDS
-            .iter()
-            .map(|(n, ..)| n.to_string())
-            .collect();
+        let want: Vec<String> = CLINICAL_BANDS.iter().map(|(n, ..)| n.to_string()).collect();
         assert_eq!(got, want);
     }
 
@@ -272,7 +269,11 @@ mod tests {
         }
         let out = per_band_fidelity(&x, &y, fs);
         let alpha = out.iter().find(|(n, ..)| n == "alpha").unwrap();
-        assert!(alpha.2 > 1e-6, "alpha PRD should be nonzero, got {}", alpha.2);
+        assert!(
+            alpha.2 > 1e-6,
+            "alpha PRD should be nonzero, got {}",
+            alpha.2
+        );
     }
 
     #[test]
@@ -322,13 +323,19 @@ mod tests {
         let out = per_band_fidelity(&empty, &empty, 256.0);
         assert_eq!(out.len(), CLINICAL_BANDS.len());
         for (name, r, prd, snr) in &out {
-            assert!(r.is_finite() && prd.is_finite() && snr.is_finite(), "{name} NaN");
+            assert!(
+                r.is_finite() && prd.is_finite() && snr.is_finite(),
+                "{name} NaN"
+            );
         }
         let x = make_signal(16, 256.0);
         let out2 = per_band_fidelity(&x, &x, 0.0);
         assert_eq!(out2.len(), CLINICAL_BANDS.len());
         for (name, r, prd, snr) in &out2 {
-            assert!(r.is_finite() && prd.is_finite() && snr.is_finite(), "{name} NaN (fs=0)");
+            assert!(
+                r.is_finite() && prd.is_finite() && snr.is_finite(),
+                "{name} NaN (fs=0)"
+            );
         }
     }
 }
