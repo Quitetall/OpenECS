@@ -17,21 +17,21 @@ content_id = "0d074e9141e35d42b37c1e7f706ee03f39f88e1bd6ab89304cd9d2864ac72d49"
 
 [[file]]
 path = "smoke/synthetic_a.edf"
-sha256 = "9a2ad884fb16d7c7a75162522fad33be7b60a780b631063197d747faa484feb9"
+sha256 = "cf8f9862813600317c694c463cf7b7ad0e9e0af990260f67c3a96fe5ef24f90d"
 fs = 256.0
 n_chan = 4
 n_samples = 1024
 
 [[file]]
 path = "smoke/synthetic_b.edf"
-sha256 = "9e71c2ecc1118d02a83696fc8ee7e9e600c173537653627320b463c808a3d96b"
+sha256 = "3a61683d4bcda11e12611626ecb83a4bd6b425ddd67347be5253faf60f9421ed"
 fs = 128.0
 n_chan = 6
 n_samples = 768
 
 [[file]]
 path = "smoke/synthetic_c.edf"
-sha256 = "a5f61ab036ed0de81eff88c5c24d5b740a864a624468579682bca1e025710922"
+sha256 = "dc914ed09238a07cdb23905bef435fec99c476b7c5020335b761cdb318eab628"
 fs = 256.0
 n_chan = 2
 n_samples = 512
