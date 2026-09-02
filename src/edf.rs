@@ -306,7 +306,7 @@ mod tests {
         let bytes = value.as_bytes();
         assert!(bytes.len() <= width, "test field {value:?} exceeds width");
         out.extend_from_slice(bytes);
-        out.extend(std::iter::repeat(b' ').take(width - bytes.len()));
+        out.extend(std::iter::repeat_n(b' ', width - bytes.len()));
     }
 
     /// Build a minimal but spec-valid EDF byte image in memory.

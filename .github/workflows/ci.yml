@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -55,3 +58,18 @@ jobs:
         run: |
           # The smoke EDFs are committed; regenerating must be idempotent.
           git diff --exit-code corpora/smoke/
+
+  secret-scan:
+    # Added 2026-09-02: this repository had no secret scanning at all. Full
+    # history, default gitleaks rules (there is no .gitleaks.toml here yet).
+    name: secret-scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
