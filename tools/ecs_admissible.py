@@ -347,9 +347,15 @@ def render_svg(points: list[Point], verdicts: list[dict], levels: list[dict]) ->
         a(f'<text x="{x:.1f}" y="{y - 11:.1f}" font-size="9.5" fill="#222" '
           f'text-anchor="middle">{_esc(pt.label[:26])}</text>')
 
+    # Name the tiers that were graded but NOT drawn. A lossless result lands at
+    # the far left with no rectangle under it, and without this line that reads
+    # as "no tier applies" rather than "its tier is off-scale".
+    hidden = [lv["level"] for lv in levels if lv["min_cr"] < 10.0]
+    hidden_note = (f" · {'/'.join(hidden)} graded but off this axis (CR≈1)"
+                   if hidden else "")
     a(f'<text x="{L}" y="{H - 10}" font-size="9.5" fill="#666">'
       f'filled = clears every criterion of a tier · hollow = does not '
-      f'(PRD is graded but not an axis — see verdict.json)</text>')
+      f'(PRD is graded but not an axis — see verdict.json){_esc(hidden_note)}</text>')
     a("</svg>")
     return "\n".join(o)
 
