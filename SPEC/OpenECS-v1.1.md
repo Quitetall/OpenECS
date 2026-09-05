@@ -481,6 +481,16 @@ terms (every finite double is a dyadic rational: 256.0 → 256/1, 250.5 → 501/
 `u64/u64` has no identity. The reference writer (`openecs emit-corpus-manifest`)
 emits exactly that derived pair.
 
+For an implementer without a library that does this: a positive finite double
+with biased exponent field `e` (11 bits) and fraction field `f` (52 bits) has the
+exact value `m × 2^(e − 1075)` with `m = f + 2^52` when `e > 0`, and
+`f × 2^(−1074)` when `e = 0`; write that as `num / 2^k` (or `num × 2^k / 1`) and
+divide out the common powers of two. Derive from the double's bits, never by
+re-parsing the decimal text of `fs`: `"0.1"` parsed as a decimal fraction is
+1/10, which is not the value above. `n_chan` and `file_count` are `u32` in the
+pre-image, `n_samples` `u64` — widths of the identity only, independent of the
+`lqs0` container's own fields (§6.4).
+
 ### 8.3 Legacy `abir_identity` (v1.0)
 
 > **Normative.**

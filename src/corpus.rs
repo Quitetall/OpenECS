@@ -293,12 +293,10 @@ pub fn exact_rational(value: f64) -> Result<(u64, u64), CorpusError> {
         exponent += 1;
     }
     if exponent >= 0 {
-        let numerator = mantissa
-            .checked_shl(exponent as u32)
-            .filter(|_| exponent < 64)
-            .ok_or_else(|| {
-                CorpusError::Semantic(format!("sample rate {value} numerator exceeds u64"))
-            })?;
+        // `exponent` is non-negative here; `checked_shl` is `None` at >= 64.
+        let numerator = mantissa.checked_shl(exponent as u32).ok_or_else(|| {
+            CorpusError::Semantic(format!("sample rate {value} numerator exceeds u64"))
+        })?;
         Ok((numerator, 1))
     } else {
         let shift = (-exponent) as u32;
@@ -315,7 +313,9 @@ impl CorpusFileEntry {
     /// The exact sample rate `(fs_num, fs_den)` this entry contributes to
     /// the content identity (§8.2.3): the declared pair when present (which
     /// must be positive, in lowest terms, and agree with `fs`), otherwise
-    /// the exact rational of `fs`.
+    /// the exact rational of `fs`. The agreement check is the shape check's
+    /// absolute 1e-6 Hz: rates are assumed to sit comfortably inside `f64`
+    /// precision, as every EEG rate does.
     pub fn sample_rate_rational(&self) -> Result<(u64, u64), CorpusError> {
         match (self.fs_num, self.fs_den) {
             (None, None) => exact_rational(self.fs),
