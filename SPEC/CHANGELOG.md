@@ -1,10 +1,51 @@
 # OpenECS specification changelog
 
-All notable changes to the OpenECS standard. The spec is versioned
-independently of the `open-eeg-codec-standard` crate. See
-[`OpenECS-v1.0.md`](OpenECS-v1.0.md) §11 for the version/stability policy.
+All notable changes to the OpenECS standard. The spec was versioned
+independently of the `open-eeg-codec-standard` crate through 0.9.x; from 1.1 the
+crate carries the spec's version line. See [`OpenECS-v1.1.md`](OpenECS-v1.1.md)
+§11 for the version/stability policy.
 
-## Unreleased
+## 1.1 — 2026-09-05 (crate 1.1.0)
+
+**No threshold changed.** The tier table is byte-for-byte what 1.0 published;
+`tests/spec_thresholds.rs` pins it independently and still passes. A minor
+revision under §11.
+
+- **Corpus content identity (§8.2).** A manifest now carries
+  `[content_identity] version = 1, digest = <sha256 hex>`: SHA-256 over the corpus
+  name/version, the byte-wise-sorted relative paths, each file's exact shape and
+  exact rational sample rate (`fs_num`/`fs_den`, §8.2.3), and every decoded `i64`
+  sample (per-file `payload_digest`, §8.2.1). No floating-point value is hashed. The
+  construction is specified byte-exactly; `tools/content_identity_kat.py` is an
+  independent standard-library Python implementation whose known-answer vectors —
+  the full pre-hash byte strings, hex-dumped — are frozen in
+  `tests/golden/content_identity_kat.json` and re-derived by
+  `tests/content_identity_kat.rs`.
+- **The ABIR dependency is gone.** 0.9.x computed the corpus identity by projecting
+  the corpus into the ABIR data model, pulled from a git revision. The standard is
+  vendor-neutral and codec-agnostic; its identity must not depend on one vendor's
+  data model, and a public crate must not depend on a git pin. `Cargo.toml` has no
+  git dependency; `cargo check --locked` succeeds from a clean clone.
+- **Legacy `[abir_identity]` (§8.3).** Read, warned about on stderr by the CLI,
+  never verified, never written, never an error — every 0.9.x corpus still grades.
+  `corpora/ecs-smoke.toml` ships both blocks for this one release.
+- **Smoke corpus identity.** `ecs-smoke` 1.0.0 →
+  `93061ae3ef0e74887c90b978f63fc82e46e4e1e17ae249bc826d1d5e60e45e7d`, frozen in
+  `tests/corpus_integrity.rs`.
+- **`spec_version` is now `"1.1"`** on every report, submission and emitted
+  manifest; `openecs emit-corpus-manifest` writes `fs_num`/`fs_den` and the
+  content identity. The manifest schema gains the new fields (additive).
+- **API (crate 1.1.0, breaking vs 0.9.2).** Removed: `abir` re-exports,
+  `CorpusAbirIdentity`, `ABIR_IDENTITY_SCHEMA`, `decoded_signal_content_id`,
+  `semantic_content_id`, `semantic_content_id_from_payloads`. Added:
+  `ContentIdentity`, `LegacyAbirIdentity`, `payload_digest`, `payload_preimage`,
+  `content_digest`, `content_preimage`, `exact_rational`, `hex_lower`,
+  `CorpusManifest::{content_identity_of, legacy_warnings}`,
+  `CorpusFileEntry::{fs_num, fs_den, sample_rate_rational}`. The projection the
+  0.9.x code computed lives on, verbatim, in the LamQuant `eagle` crate
+  (`openecs_corpus_abir_content_id`) for anyone who needs the old value.
+
+## Unreleased (folded into 1.1 above)
 
 **No threshold changed.** The tier table is byte-for-byte what 1.0 published;
 `tests/spec_thresholds.rs` pins it independently and still passes.

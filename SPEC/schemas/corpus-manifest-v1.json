@@ -2,23 +2,57 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lamquant.org/lqs/schemas/corpus-manifest-v1.json",
   "title": "CorpusManifest",
-  "description": "Language-neutral schema for an OpenECS v1.0 corpus manifest. The on-disk form is TOML (see SPEC/OpenECS-v1.0.md §8). Mirrors eeg_codec_standard::corpus::CorpusManifest.",
+  "description": "Language-neutral schema for an OpenECS v1.x corpus manifest. The on-disk form is TOML (see SPEC/OpenECS-v1.1.md §8). Mirrors open_eeg_codec_standard::corpus::CorpusManifest. v1.1 adds `content_identity` and the exact-rate pair `fs_num`/`fs_den`; `abir_identity` is the v1.0 block, read but no longer written or verified.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "version", "file"],
+  "required": [
+    "name",
+    "version",
+    "file"
+  ],
   "properties": {
     "spec_version": {
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+$",
-      "description": "OpenECS spec version the manifest targets. Defaults to \"1.0\"."
+      "description": "OpenECS spec version the manifest targets. Defaults to the grader's own (\"1.1\")."
     },
-    "name": { "type": "string", "description": "Corpus identifier, e.g. \"ecs-smoke\"." },
-    "version": { "type": "string", "description": "Corpus version, e.g. \"1.0.0\"." },
+    "name": {
+      "type": "string",
+      "description": "Corpus identifier, e.g. \"ecs-smoke\"."
+    },
+    "version": {
+      "type": "string",
+      "description": "Corpus version, e.g. \"1.0.0\"."
+    },
+    "content_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "digest"
+      ],
+      "description": "Codec-agnostic content identity of the decoded corpus (OpenECS v1.1 §8.2). Optional on legacy reads; mandatory on new writes; verified before a grade is accepted.",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "description": "Identity construction version. v1.1 graders implement 1."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Lowercase-hex SHA-256 content_digest (§8.2.2)."
+        }
+      }
+    },
     "abir_identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema", "content_id"],
-      "description": "Optional on legacy reads; mandatory on new writes. ABIR semantic identity of decoded corpus meaning.",
+      "required": [
+        "schema",
+        "content_id"
+      ],
+      "description": "LEGACY (OpenECS v1.0): the ABIR semantic identity 1.0 writers emitted. A v1.1 grader reads it, warns, and neither verifies nor writes it. Retained so 1.0 manifests still validate.",
       "properties": {
         "schema": {
           "const": "org.quitetall.openecs.corpus-identity-projection-v1"
@@ -36,7 +70,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["path", "sha256", "fs", "n_chan", "n_samples"],
+        "required": [
+          "path",
+          "sha256",
+          "fs",
+          "n_chan",
+          "n_samples"
+        ],
         "properties": {
           "path": {
             "type": "string",
@@ -47,9 +87,31 @@
             "pattern": "^[0-9a-f]{64}$",
             "description": "Lowercase-hex SHA-256 of the file bytes. Verified before grading."
           },
-          "fs": { "type": "number", "exclusiveMinimum": 0, "description": "Expected sample rate in Hz." },
-          "n_chan": { "type": "integer", "minimum": 1, "description": "Expected channel count." },
-          "n_samples": { "type": "integer", "minimum": 1, "description": "Expected samples per channel." }
+          "fs": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Expected sample rate in Hz."
+          },
+          "fs_num": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Numerator of the exact sample rate fs_num/fs_den (v1.1 §8.2.3), in lowest terms, agreeing with `fs`. New writers emit both; when absent the grader derives the pair as the exact binary rational of `fs`."
+          },
+          "fs_den": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Denominator of the exact sample rate; see fs_num. Declared together with it or not at all."
+          },
+          "n_chan": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Expected channel count."
+          },
+          "n_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Expected samples per channel."
+          }
         }
       }
     }
