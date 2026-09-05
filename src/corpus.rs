@@ -293,11 +293,17 @@ pub fn exact_rational(value: f64) -> Result<(u64, u64), CorpusError> {
         exponent += 1;
     }
     if exponent >= 0 {
-        // `exponent` is non-negative here; `checked_shl` is `None` at >= 64.
-        let numerator = mantissa.checked_shl(exponent as u32).ok_or_else(|| {
-            CorpusError::Semantic(format!("sample rate {value} numerator exceeds u64"))
-        })?;
-        Ok((numerator, 1))
+        // A left shift loses bits as soon as it exceeds the leading zeros;
+        // `checked_shl` would only refuse shifts of 64 or more, so 2^64 Hz
+        // would fold to 0. `mantissa` is non-zero here (the value is
+        // positive), so `leading_zeros` is at most 63.
+        let shift = exponent as u32;
+        if shift > mantissa.leading_zeros() {
+            return Err(CorpusError::Semantic(format!(
+                "sample rate {value} numerator exceeds u64"
+            )));
+        }
+        Ok((mantissa << shift, 1))
     } else {
         let shift = (-exponent) as u32;
         if shift >= 64 {
@@ -872,6 +878,15 @@ mod tests {
         assert!(exact_rational(f64::INFINITY).is_err());
         // Too small to fit a u64 denominator.
         assert!(exact_rational(f64::MIN_POSITIVE).is_err());
+        // The largest power of two that fits; one more bit and 1.5x it do not
+        // (checked_shl alone would have folded 2^64 to 0 rather than refuse).
+        assert_eq!(
+            exact_rational(9_223_372_036_854_775_808.0).unwrap(),
+            (1 << 63, 1)
+        );
+        assert!(exact_rational(18_446_744_073_709_551_616.0).is_err());
+        assert!(exact_rational(27_670_116_110_564_327_424.0).is_err());
+        assert!(exact_rational(f64::MAX).is_err());
     }
 
     #[test]
