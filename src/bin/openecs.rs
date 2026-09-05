@@ -1,12 +1,13 @@
 //! `openecs` — CLI for the OpenECS universal EEG-compression benchmark
-//! (OpenECS v1.0; see `SPEC/OpenECS-v1.0.md`).
+//! (OpenECS v1.1; see `SPEC/OpenECS-v1.1.md`).
 //!
 //! Subcommands (run `openecs <cmd> --help` for each):
 //!
 //! - `grade` — grade ONE codec over a corpus / EDF / synthetic fixture.
 //! - `bench` — grade a codec **and baselines**, ranked, with confidence
 //!   intervals + significance, a progress bar, and optional HTML report.
-//! - `verify-corpus` — check a corpus manifest's SHA-256 + shape pins.
+//! - `verify-corpus` — check a corpus manifest's SHA-256 + shape pins and
+//!   its declared content identity.
 //! - `emit-corpus-manifest` — hash a directory of EDFs into a pinned manifest.
 //! - `levels` — print the OpenECS tier ladder as JSON (the machine-readable
 //!   export of `levels::levels()`, so downstream tooling never re-types a floor).
@@ -25,8 +26,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use open_eeg_codec_standard::adapter::{deserialize, serialize, Codec, Gzip, Store};
 use open_eeg_codec_standard::corpus::{
-    self, decoded_signal_content_id, semantic_content_id_from_payloads, sha256_hex,
-    CorpusAbirIdentity, CorpusFileEntry, CorpusManifest, ABIR_IDENTITY_SCHEMA,
+    self, payload_digest, sha256_hex, ContentIdentity, CorpusFileEntry, CorpusManifest,
 };
 use open_eeg_codec_standard::report::{CodecIdentity, CorpusIdentity, EcsReport, EcsSubmission};
 use open_eeg_codec_standard::subprocess::write_edf_bytes;
@@ -365,6 +365,20 @@ fn manifest_base(path: &Path) -> &Path {
     path.parent().unwrap_or_else(|| Path::new("."))
 }
 
+/// Load a corpus manifest for a subcommand: a load/parse failure is exit 5;
+/// blocks this grader reads but does not verify (the OpenECS 1.0
+/// `[abir_identity]`) are reported on stderr and never fatal.
+fn load_manifest(path: &Path) -> Result<CorpusManifest, ExitCode> {
+    let manifest = corpus::load_corpus_manifest(path).map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(5)
+    })?;
+    for warning in manifest.legacy_warnings() {
+        eprintln!("warning: {}: {warning}", path.display());
+    }
+    Ok(manifest)
+}
+
 // ─────────────────────────────────── grade ─────────────────────────────────
 
 fn cmd_grade(a: GradeArgs) -> ExitCode {
@@ -376,12 +390,9 @@ fn cmd_grade(a: GradeArgs) -> ExitCode {
 
     // Corpus path.
     if let Some(corpus_path) = &a.corpus_manifest {
-        let manifest = match corpus::load_corpus_manifest(corpus_path) {
+        let manifest = match load_manifest(corpus_path) {
             Ok(m) => m,
-            Err(e) => {
-                eprintln!("error: {e}");
-                return ExitCode::from(5);
-            }
+            Err(code) => return code,
         };
         let base = manifest_base(corpus_path);
         let (reports, summary) = match grade_corpus_with_progress(
@@ -474,12 +485,9 @@ fn cmd_grade(a: GradeArgs) -> ExitCode {
 
 fn cmd_bench(a: BenchArgs) -> ExitCode {
     let color = term::colors_on() && !a.no_color;
-    let manifest = match corpus::load_corpus_manifest(&a.corpus_manifest) {
+    let manifest = match load_manifest(&a.corpus_manifest) {
         Ok(m) => m,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(5);
-        }
+        Err(code) => return code,
     };
     let base = manifest_base(&a.corpus_manifest);
 
@@ -653,12 +661,9 @@ fn render_bench_table(subs: &[EcsSubmission], target: &str, color: bool) -> Stri
 // ──────────────────────────── verify / emit ────────────────────────────────
 
 fn cmd_verify_corpus(path: &Path) -> ExitCode {
-    let manifest = match corpus::load_corpus_manifest(path) {
+    let manifest = match load_manifest(path) {
         Ok(m) => m,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(5);
-        }
+        Err(code) => return code,
     };
     let base = manifest_base(path);
     println!(
@@ -677,8 +682,12 @@ fn cmd_verify_corpus(path: &Path) -> ExitCode {
                     sig.first().map(|c| c.len()).unwrap_or(0)
                 );
             }
+            let identity = match &manifest.content_identity {
+                Some(identity) => format!("content identity v{} verified", identity.version),
+                None => "no content identity declared".to_string(),
+            };
             println!(
-                "\nOK: all {} files verified (sha256 + shape + declared semantic identity).",
+                "\nOK: all {} files verified (sha256 + shape; {identity}).",
                 files.len()
             );
             ExitCode::SUCCESS
@@ -699,7 +708,7 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
     edfs.sort();
 
     let mut entries = Vec::new();
-    let mut payload_ids = Vec::new();
+    let mut payload_digests = Vec::new();
     for path in &edfs {
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
@@ -729,14 +738,30 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
             eprintln!("warning: skip {} (path is not UTF-8)", path.display());
             continue;
         };
+        let (fs_num, fs_den) = match corpus::exact_rational(sig.fs) {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("warning: skip {} ({e})", path.display());
+                continue;
+            }
+        };
+        let digest = match payload_digest(&sig.channels) {
+            Ok(digest) => digest,
+            Err(e) => {
+                eprintln!("warning: skip {} ({e})", path.display());
+                continue;
+            }
+        };
         entries.push(CorpusFileEntry {
             path: rel.replace('\\', "/"),
             sha256: sha256_hex(&bytes),
             fs: sig.fs,
+            fs_num: Some(fs_num),
+            fs_den: Some(fs_den),
             n_chan,
             n_samples,
         });
-        payload_ids.push(decoded_signal_content_id(&sig.channels));
+        payload_digests.push(digest);
     }
     if entries.is_empty() {
         eprintln!("emitted 0 file entries from {}", a.root.display());
@@ -747,20 +772,17 @@ fn cmd_emit_manifest(a: &EmitArgs) -> ExitCode {
         spec_version: open_eeg_codec_standard::SPEC_VERSION.to_string(),
         name: a.name.clone(),
         version: a.version.clone(),
+        content_identity: None,
         abir_identity: None,
         file: entries,
     };
-    let content_id = match semantic_content_id_from_payloads(&manifest, &payload_ids) {
-        Ok(content_id) => content_id,
+    manifest.content_identity = match ContentIdentity::compute(&manifest, &payload_digests) {
+        Ok(identity) => Some(identity),
         Err(error) => {
-            eprintln!("error: deriving ABIR corpus identity: {error}");
+            eprintln!("error: deriving corpus content identity: {error}");
             return ExitCode::from(4);
         }
     };
-    manifest.abir_identity = Some(CorpusAbirIdentity {
-        schema: ABIR_IDENTITY_SCHEMA.to_string(),
-        content_id,
-    });
     let output = match toml::to_string_pretty(&manifest) {
         Ok(output) => output,
         Err(error) => {

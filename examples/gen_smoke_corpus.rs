@@ -13,12 +13,14 @@
 //! ```
 //!
 //! It writes `corpora/smoke/*.edf` and prints the `[[file]]` blocks (with
-//! real SHA-256 + shape) to paste into `corpora/ecs-smoke.toml`.
+//! real SHA-256, exact rate and shape) to paste into `corpora/ecs-smoke.toml`;
+//! the `[content_identity]` block comes from
+//! `openecs emit-corpus-manifest --name ecs-smoke --version 1.0.0 --root corpora`.
 
 use std::f64::consts::PI;
 use std::path::PathBuf;
 
-use open_eeg_codec_standard::corpus::sha256_hex;
+use open_eeg_codec_standard::corpus::{exact_rational, sha256_hex};
 use open_eeg_codec_standard::subprocess::write_edf_bytes;
 
 /// One synthetic EEG-shaped channel: a deterministic sum of band-placed
@@ -71,7 +73,10 @@ fn main() {
         println!("[[file]]");
         println!("path = \"smoke/{name}\"");
         println!("sha256 = \"{sha}\"");
+        let (fs_num, fs_den) = exact_rational(*fs).expect("positive finite rate");
         println!("fs = {fs:.1}");
+        println!("fs_num = {fs_num}");
+        println!("fs_den = {fs_den}");
         println!("n_chan = {n_chan}");
         println!("n_samples = {n_samp}");
         println!();

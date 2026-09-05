@@ -1,16 +1,27 @@
 # OpenECS smoke corpus — a tiny, redistributable, SYNTHETIC EEG corpus.
 #
-# Ships in-repo so OpenECS runs offline with zero external data (SPEC/OpenECS-v1.0.md
+# Ships in-repo so OpenECS runs offline with zero external data (SPEC/OpenECS-v1.1.md
 # §8). NOT patient data: deterministic band-placed sinusoids in the EDF i16
 # digital domain, regenerable byte-for-byte via
 # `cargo run --example gen_smoke_corpus`. Paths are relative to this file's
 # directory. For real public corpora (CHB-MIT, TUEG, …) see README.md and pin
 # them locally with `openecs emit-corpus-manifest`.
 
-spec_version = "1.0"
+spec_version = "1.1"
 name = "ecs-smoke"
 version = "1.0.0"
 
+# The codec-agnostic content identity of SPEC/OpenECS-v1.1.md §8.2: SHA-256 over
+# the corpus name/version, the sorted relative paths, the exact shapes and
+# rational sample rates, and the decoded i64 samples. Verified by every 1.1
+# grader before a grade is accepted.
+[content_identity]
+version = 1
+digest = "93061ae3ef0e74887c90b978f63fc82e46e4e1e17ae249bc826d1d5e60e45e7d"
+
+# LEGACY, shipped for one release (1.1) beside the block above so an OpenECS 1.0
+# grader keeps its pin. It is the ABIR projection 1.0 computed; a 1.1 grader
+# reads it, warns, and never verifies or writes it. Removed in the next release.
 [abir_identity]
 schema = "org.quitetall.openecs.corpus-identity-projection-v1"
 content_id = "0d074e9141e35d42b37c1e7f706ee03f39f88e1bd6ab89304cd9d2864ac72d49"
@@ -19,6 +30,8 @@ content_id = "0d074e9141e35d42b37c1e7f706ee03f39f88e1bd6ab89304cd9d2864ac72d49"
 path = "smoke/synthetic_a.edf"
 sha256 = "cf8f9862813600317c694c463cf7b7ad0e9e0af990260f67c3a96fe5ef24f90d"
 fs = 256.0
+fs_num = 256
+fs_den = 1
 n_chan = 4
 n_samples = 1024
 
@@ -26,6 +39,8 @@ n_samples = 1024
 path = "smoke/synthetic_b.edf"
 sha256 = "3a61683d4bcda11e12611626ecb83a4bd6b425ddd67347be5253faf60f9421ed"
 fs = 128.0
+fs_num = 128
+fs_den = 1
 n_chan = 6
 n_samples = 768
 
@@ -33,5 +48,7 @@ n_samples = 768
 path = "smoke/synthetic_c.edf"
 sha256 = "dc914ed09238a07cdb23905bef435fec99c476b7c5020335b761cdb318eab628"
 fs = 256.0
+fs_num = 256
+fs_den = 1
 n_chan = 2
 n_samples = 512

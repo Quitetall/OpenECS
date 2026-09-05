@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use open_eeg_codec_standard::adapter::Store;
 use open_eeg_codec_standard::corpus::{
-    grade_manifest_parallel, load_corpus_manifest, verify_and_load, CorpusAbirIdentity,
-    CorpusError, ABIR_IDENTITY_SCHEMA,
+    grade_manifest_parallel, load_corpus_manifest, verify_and_load, ContentIdentity, CorpusError,
+    CONTENT_IDENTITY_VERSION,
 };
 use open_eeg_codec_standard::harness;
 
@@ -99,13 +99,83 @@ fn parallel_grader_rejects_tampered_hash() {
     );
 }
 
+/// The smoke corpus's content identity (SPEC/OpenECS-v1.1.md §8.2), frozen
+/// here independently of the manifest: the manifest pins it for the loader,
+/// this literal pins it for the reader of this file. Both must agree, and
+/// both must agree with what the decoded EDFs hash to. Regenerating the
+/// corpus (`cargo run --example gen_smoke_corpus`) is byte-stable, so this
+/// only moves when the identity construction or the corpus content does.
+const SMOKE_CONTENT_DIGEST: &str =
+    "93061ae3ef0e74887c90b978f63fc82e46e4e1e17ae249bc826d1d5e60e45e7d";
+
 #[test]
-fn parallel_grader_rejects_semantic_identity_mismatch() {
+fn smoke_corpus_content_digest_is_frozen() {
+    let manifest = load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
+    let declared = manifest
+        .content_identity
+        .as_ref()
+        .expect("the smoke manifest declares a content identity");
+    assert_eq!(declared.version, CONTENT_IDENTITY_VERSION);
+    assert_eq!(
+        declared.digest, SMOKE_CONTENT_DIGEST,
+        "manifest pin drifted"
+    );
+
+    // Recompute from the decoded corpus, bypassing the loader's own check.
+    let mut unpinned = manifest.clone();
+    unpinned.content_identity = None;
+    let files = verify_and_load(&unpinned, corpora_dir()).expect("verifies");
+    let observed = unpinned.content_identity_of(&files).expect("identity");
+    assert_eq!(
+        observed.digest, SMOKE_CONTENT_DIGEST,
+        "decoded corpus drifted"
+    );
+}
+
+#[test]
+fn smoke_manifest_still_carries_the_legacy_block_for_one_release() {
+    // OpenECS 1.1 ships both blocks in ecs-smoke.toml so a 1.0 grader keeps
+    // its pin while a 1.1 grader verifies the content identity. The legacy
+    // block is read, warned about, and never an error.
+    let manifest = load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
+    let legacy = manifest
+        .abir_identity
+        .as_ref()
+        .expect("legacy [abir_identity] block still shipped");
+    assert!(
+        legacy.content_id.starts_with("0d074e91") && legacy.content_id.ends_with("2d49"),
+        "the 1.0 projection the LamQuant side re-homes"
+    );
+    let warnings = manifest.legacy_warnings();
+    assert_eq!(
+        warnings.len(),
+        1,
+        "legacy block present, content identity present"
+    );
+    verify_and_load(&manifest, corpora_dir()).expect("both blocks: still grades");
+}
+
+#[test]
+fn legacy_only_manifest_grades_with_a_warning() {
+    // A 0.9.2-era manifest: `[abir_identity]` and no `[content_identity]`.
     let mut manifest =
         load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
-    manifest.abir_identity = Some(CorpusAbirIdentity {
-        schema: ABIR_IDENTITY_SCHEMA.to_string(),
-        content_id: "0".repeat(64),
+    manifest.content_identity = None;
+    manifest.abir_identity.as_mut().unwrap().content_id = "0".repeat(64);
+    assert_eq!(manifest.legacy_warnings().len(), 2);
+    let (reports, summary) =
+        grade_manifest_parallel(&manifest, corpora_dir(), &Store, 1, || {}).expect("grades");
+    assert_eq!(reports.len(), 3);
+    assert!(summary.all_bit_exact);
+}
+
+#[test]
+fn parallel_grader_rejects_content_identity_mismatch() {
+    let mut manifest =
+        load_corpus_manifest(corpora_dir().join("ecs-smoke.toml")).expect("manifest");
+    manifest.content_identity = Some(ContentIdentity {
+        version: CONTENT_IDENTITY_VERSION,
+        digest: "0".repeat(64),
     });
     let err = grade_manifest_parallel(&manifest, corpora_dir(), &Store, 1, || {});
     assert!(matches!(err, Err(CorpusError::Semantic(_))));

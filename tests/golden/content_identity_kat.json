@@ -1,0 +1,77 @@
+{
+  "schema": "openecs.content-identity-kat/v1",
+  "spec": "SPEC/OpenECS-v1.1.md §8.2",
+  "generator": "tools/content_identity_kat.py",
+  "content_identity_version": 1,
+  "name": "kat-corpus-é",
+  "version": "1.2.3",
+  "file": [
+    {
+      "path": "b.edf",
+      "fs": 250.5,
+      "fs_num": 501,
+      "fs_den": 2,
+      "n_chan": 2,
+      "n_samples": 3,
+      "channels": [
+        [
+          1,
+          -1,
+          0
+        ],
+        [
+          9223372036854775807,
+          -9223372036854775808,
+          7
+        ]
+      ],
+      "payload_preimage_hex": "4f70656e4543532d7061796c6f6164000100000200000003000000000000000100000000000000ffffffffffffffff0000000000000000ffffffffffffff7f00000000000000800700000000000000",
+      "payload_digest": "7cbf94475a4ce6c6c14d99dd065e001f0e12253c31221fe4dbb1db0bee8457c4"
+    },
+    {
+      "path": "a/x.edf",
+      "fs": 0.1,
+      "fs_num": 3602879701896397,
+      "fs_den": 36028797018963968,
+      "n_chan": 1,
+      "n_samples": 1,
+      "channels": [
+        [
+          42
+        ]
+      ],
+      "payload_preimage_hex": "4f70656e4543532d7061796c6f6164000100000100000001000000000000002a00000000000000",
+      "payload_digest": "0a09be5c08d0100603952209aad162b5ffe3847b8d0b19fcaee4cb5c96d0a9e2"
+    },
+    {
+      "path": "a/y.edf",
+      "fs": 256.0,
+      "fs_num": 256,
+      "fs_den": 1,
+      "n_chan": 4,
+      "n_samples": 2,
+      "channels": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "payload_preimage_hex": "4f70656e4543532d7061796c6f61640001000004000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000200000000000000",
+      "payload_digest": "8ed9564e733afc9802e6631378ae867d65b3b59db45764af85ad24aa07407c5e"
+    }
+  ],
+  "content_preimage_hex": "4f70656e4543532d636f727075732d6964656e7469747900010000000d0000006b61742d636f727075732dc3a905000000312e322e330300000007000000612f782e656466010000000100000000000000cdcccccccccc0c0000000000000080000a09be5c08d0100603952209aad162b5ffe3847b8d0b19fcaee4cb5c96d0a9e207000000612f792e656466040000000200000000000000000100000000000001000000000000008ed9564e733afc9802e6631378ae867d65b3b59db45764af85ad24aa07407c5e05000000622e656466020000000300000000000000f50100000000000002000000000000007cbf94475a4ce6c6c14d99dd065e001f0e12253c31221fe4dbb1db0bee8457c4",
+  "content_digest": "ff5069337211d1391c3ccdfa6114ffccad76b337673f71b1ba5858f54789187b"
+}

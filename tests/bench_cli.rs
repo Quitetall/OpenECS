@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use open_eeg_codec_standard::corpus::CorpusManifest;
+use open_eeg_codec_standard::corpus::{load_corpus_manifest, verify_and_load, CorpusManifest};
 
 /// Path to the compiled binary (cargo sets this for integration tests).
 fn bin() -> &'static str {
@@ -82,7 +82,7 @@ fn verify_corpus_passes_on_smoke() {
 }
 
 #[test]
-fn emitted_manifest_carries_abir_semantic_identity() {
+fn emitted_manifest_carries_a_content_identity_and_exact_rates() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpora");
     let out = Command::new(bin())
         .args([
@@ -100,19 +100,48 @@ fn emitted_manifest_carries_abir_semantic_identity() {
     assert!(out.stdout.ends_with(b"\n"), "manifest is line terminated");
     let text = String::from_utf8(out.stdout).expect("manifest is UTF-8");
     let manifest: CorpusManifest = toml::from_str(&text).expect("manifest parses");
-    let identity = manifest
-        .abir_identity
-        .expect("ABIR identity is mandatory on new writes");
-    assert_eq!(
-        identity.schema,
-        open_eeg_codec_standard::corpus::ABIR_IDENTITY_SCHEMA
+    assert!(
+        !text.contains("abir_identity"),
+        "a 1.1 writer never emits the legacy block"
     );
-    assert_eq!(identity.content_id.len(), 64);
+    assert_eq!(manifest.spec_version, open_eeg_codec_standard::SPEC_VERSION);
+    let identity = manifest
+        .content_identity
+        .as_ref()
+        .expect("content identity is mandatory on new writes");
+    assert_eq!(
+        identity.version,
+        open_eeg_codec_standard::corpus::CONTENT_IDENTITY_VERSION
+    );
+    assert_eq!(identity.digest.len(), 64);
     assert!(identity
-        .content_id
+        .digest
         .bytes()
-        .all(|byte| byte.is_ascii_hexdigit()));
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
     assert_eq!(manifest.file.len(), 3);
+    for entry in &manifest.file {
+        assert_eq!(entry.fs_den, Some(1), "smoke rates are integers");
+        assert_eq!(entry.fs_num.map(|n| n as f64), Some(entry.fs));
+    }
+    // The emitted identity is the corpus's own: with the committed smoke
+    // manifest's name and version substituted, the same files reproduce the
+    // committed digest.
+    let smoke = load_corpus_manifest(smoke_manifest()).expect("smoke manifest");
+    let mut renamed = manifest.clone();
+    renamed.name = smoke.name.clone();
+    renamed.version = smoke.version.clone();
+    renamed.content_identity = None; // the emitted pin names the other corpus
+    let files = verify_and_load(&renamed, &root).expect("emitted manifest verifies");
+    assert_eq!(
+        renamed
+            .content_identity_of(&files)
+            .expect("identity")
+            .digest,
+        smoke
+            .content_identity
+            .expect("smoke pins an identity")
+            .digest
+    );
 }
 
 #[test]

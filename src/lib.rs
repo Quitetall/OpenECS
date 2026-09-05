@@ -37,8 +37,9 @@
 
 /// The OpenECS specification version this crate implements (see `SPEC/`).
 /// Stamped onto every emitted report and submission. The tier ladder
-/// L < N < C < M < A is part of OpenECS v1.0.
-pub const SPEC_VERSION: &str = "1.0";
+/// L < N < C < M < A is part of OpenECS v1.0; v1.1 adds the codec-agnostic
+/// corpus content identity (`corpus::content_digest`) and no threshold change.
+pub const SPEC_VERSION: &str = "1.1";
 
 /// The major component of [`SPEC_VERSION`]. A grader accepts a manifest whose
 /// major is this or older, and refuses a newer major it does not implement

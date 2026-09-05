@@ -1,4 +1,4 @@
-//! Corpus manifest loader + integrity verifier (SPEC/OpenECS-v1.0.md §8).
+//! Corpus manifest loader + integrity verifier (SPEC/OpenECS-v1.1.md §8).
 //!
 //! Cross-lab comparability requires a frozen, hash-pinned corpus. A corpus
 //! manifest (TOML) names a corpus, its version, and each file with a pinned
@@ -7,16 +7,21 @@
 //! mismatch — then reads each EDF and asserts the declared shape, returning
 //! the `(signal, fs)` corpus that [`crate::harness::run_corpus`] consumes
 //! directly. Host-side only; not on the grading hot path.
+//!
+//! Beside the per-file byte pins, a manifest MAY carry a **content identity**
+//! (§8.2): one SHA-256 over the decoded meaning of the corpus — names, sorted
+//! relative paths, exact shapes, exact rational sample rates and the decoded
+//! `i64` samples — so two labs holding the same recordings under different
+//! roots or container bytes can tell they graded the same thing. The
+//! identity is defined byte-exactly in the spec and reproduced here by
+//! [`payload_digest`] / [`content_digest`]; [`payload_preimage`] and
+//! [`content_preimage`] expose the exact pre-hash byte strings so another
+//! implementation can be checked against the known-answer vectors in
+//! `tests/golden/content_identity_kat.json`.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use abir::{
-    logical_content_id, Atom, AtomTag, ByteOrder, ConceptId, ContentId, DatasetDraft, DatasetTag,
-    ElementType, Layout, ObjectId, PayloadContentHasher, PayloadDescriptor, Presence, Rational,
-    Recording, RecordingTag, SignalBlock, SourceKey, Stream, StreamTag, TimeAxis, TimeSegment,
-    ValidationLimits,
-};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -30,8 +35,29 @@ use crate::report::EcsReport;
 /// per file — the exact shape [`crate::harness::run_corpus`] consumes.
 pub type LoadedCorpus = Vec<(Vec<Vec<i64>>, f64)>;
 
-/// OpenECS projection schema binding decoded corpus meaning to ABIR.
-pub const ABIR_IDENTITY_SCHEMA: &str = "org.quitetall.openecs.corpus-identity-projection-v1";
+/// The content-identity version this grader computes and verifies (§8.2).
+pub const CONTENT_IDENTITY_VERSION: u32 = 1;
+
+/// Domain separator opening every payload pre-image (§8.2.1). The NUL is
+/// part of the string: 16 bytes.
+pub const PAYLOAD_DOMAIN: &[u8] = b"OpenECS-payload\0";
+
+/// Domain separator opening every corpus pre-image (§8.2.2). The NUL is
+/// part of the string: 24 bytes.
+pub const CONTENT_DOMAIN: &[u8] = b"OpenECS-corpus-identity\0";
+
+/// `element_type` byte of a payload pre-image: `1` = signed 64-bit integer.
+pub const PAYLOAD_ELEMENT_TYPE_I64: u8 = 1;
+
+/// `byte_order` byte of a payload pre-image: `0` = little-endian.
+pub const PAYLOAD_BYTE_ORDER_LITTLE: u8 = 0;
+
+/// `layout` byte of a payload pre-image: `0` = channel-major (all samples of
+/// channel 0, then all of channel 1, …).
+pub const PAYLOAD_LAYOUT_CHANNEL_MAJOR: u8 = 0;
+
+/// A SHA-256 digest as raw bytes.
+pub type Digest32 = [u8; 32];
 
 /// Default `spec_version` when a manifest omits it.
 fn default_spec_version() -> String {
@@ -48,20 +74,36 @@ pub struct CorpusManifest {
     pub name: String,
     /// Corpus version, e.g. `"1.0.0"`.
     pub version: String,
-    /// Optional ABIR semantic identity. Legacy v1 manifests omit it.
-    #[serde(default)]
-    pub abir_identity: Option<CorpusAbirIdentity>,
+    /// Optional codec-agnostic content identity (§8.2). Manifests written
+    /// before OpenECS 1.1 omit it; new writers MUST emit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_identity: Option<ContentIdentity>,
+    /// The `[abir_identity]` block OpenECS 1.0 manifests carried: an ABIR
+    /// projection this grader no longer computes. Read so that 1.0 corpora
+    /// still grade; never verified, never written back — see
+    /// [`CorpusManifest::legacy_warnings`].
+    #[serde(default, skip_serializing)]
+    pub abir_identity: Option<LegacyAbirIdentity>,
     /// The pinned files (TOML `[[file]]` array).
     #[serde(default)]
     pub file: Vec<CorpusFileEntry>,
 }
 
-/// ABIR identity projection carried by current corpus manifests.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CorpusAbirIdentity {
-    /// Projection schema.
+/// The `[content_identity]` block of a manifest (§8.2).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct ContentIdentity {
+    /// Identity construction version. This grader implements `1`.
+    pub version: u32,
+    /// Lowercase-hex SHA-256 [`content_digest`] of the corpus.
+    pub digest: String,
+}
+
+/// The legacy `[abir_identity]` block (OpenECS 1.0). Deserialize-only.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LegacyAbirIdentity {
+    /// Projection schema the 1.0 writer named.
     pub schema: String,
-    /// Lowercase ABIR ContentId of decoded corpus meaning.
+    /// The 1.0 writer's ABIR ContentId. Not verified by this grader.
     pub content_id: String,
 }
 
@@ -74,6 +116,13 @@ pub struct CorpusFileEntry {
     pub sha256: String,
     /// Expected sample rate in Hz.
     pub fs: f64,
+    /// Numerator of the exact sample rate `fs_num / fs_den` (§8.2.3). New
+    /// writers emit both; when absent the grader derives the pair from `fs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fs_num: Option<u64>,
+    /// Denominator of the exact sample rate; see `fs_num`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fs_den: Option<u64>,
     /// Expected channel count.
     pub n_chan: usize,
     /// Expected samples per channel.
@@ -107,13 +156,10 @@ pub enum CorpusError {
     },
     /// An EDF file failed to parse.
     Edf(String, std::io::Error),
-    /// ABIR semantic projection could not be constructed or validated.
+    /// The content identity could not be constructed, or the declared
+    /// digest does not match the decoded corpus.
     Semantic(String),
 }
-
-const RECORDING_ID_NAMESPACE: u8 = 1;
-const STREAM_ID_NAMESPACE: u8 = 2;
-const ATOM_ID_NAMESPACE: u8 = 3;
 
 impl fmt::Display for CorpusError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -133,21 +179,101 @@ impl fmt::Display for CorpusError {
                 write!(f, "shape mismatch for {path:?}: {detail}")
             }
             CorpusError::Edf(p, e) => write!(f, "reading EDF {p:?}: {e}"),
-            CorpusError::Semantic(detail) => write!(f, "ABIR corpus identity: {detail}"),
+            CorpusError::Semantic(detail) => write!(f, "corpus content identity: {detail}"),
         }
     }
 }
 
-fn indexed_id<T>(kind: u8, index: usize) -> Result<ObjectId<T>, CorpusError> {
-    let index = u64::try_from(index)
-        .map_err(|_| CorpusError::Semantic("corpus entry index exceeds u64".to_string()))?;
-    let mut bytes = [0_u8; 16];
-    bytes[0] = kind;
-    bytes[8..].copy_from_slice(&index.to_be_bytes());
-    Ok(ObjectId::from_bytes(bytes))
+impl std::error::Error for CorpusError {}
+
+// ───────────────────────────── content identity ─────────────────────────────
+
+/// Something that absorbs the bytes of a pre-image: the hasher, or a buffer
+/// when the pre-image itself is wanted (known-answer vectors).
+trait Absorb {
+    fn absorb(&mut self, bytes: &[u8]);
 }
 
-fn exact_positive_f64(value: f64) -> Result<Rational, CorpusError> {
+impl Absorb for Sha256 {
+    fn absorb(&mut self, bytes: &[u8]) {
+        self.update(bytes);
+    }
+}
+
+impl Absorb for Vec<u8> {
+    fn absorb(&mut self, bytes: &[u8]) {
+        self.extend_from_slice(bytes);
+    }
+}
+
+/// `lp(s)`: a `u32le` byte length followed by the UTF-8 bytes (§8.2.2).
+fn absorb_lp(sink: &mut impl Absorb, field: &str, s: &str) -> Result<(), CorpusError> {
+    let len = u32::try_from(s.len())
+        .map_err(|_| CorpusError::Semantic(format!("{field} exceeds u32 bytes")))?;
+    sink.absorb(&len.to_le_bytes());
+    sink.absorb(s.as_bytes());
+    Ok(())
+}
+
+fn absorb_payload(sink: &mut impl Absorb, signal: &[Vec<i64>]) -> Result<(), CorpusError> {
+    let n_chan = u32::try_from(signal.len())
+        .map_err(|_| CorpusError::Semantic("channel count exceeds u32".to_string()))?;
+    let n_samples = signal.first().map(Vec::len).unwrap_or(0);
+    if let Some(bad) = signal.iter().find(|channel| channel.len() != n_samples) {
+        return Err(CorpusError::Semantic(format!(
+            "ragged signal: a channel of {} samples beside channels of {n_samples}",
+            bad.len()
+        )));
+    }
+    let n_samples = u64::try_from(n_samples)
+        .map_err(|_| CorpusError::Semantic("sample count exceeds u64".to_string()))?;
+    sink.absorb(PAYLOAD_DOMAIN);
+    sink.absorb(&[
+        PAYLOAD_ELEMENT_TYPE_I64,
+        PAYLOAD_BYTE_ORDER_LITTLE,
+        PAYLOAD_LAYOUT_CHANNEL_MAJOR,
+    ]);
+    sink.absorb(&n_chan.to_le_bytes());
+    sink.absorb(&n_samples.to_le_bytes());
+    for channel in signal {
+        for sample in channel {
+            sink.absorb(&sample.to_le_bytes());
+        }
+    }
+    Ok(())
+}
+
+/// The exact pre-image of [`payload_digest`] (§8.2.1), for known-answer
+/// checks. Allocates the whole string; grading uses the streaming form.
+pub fn payload_preimage(signal: &[Vec<i64>]) -> Result<Vec<u8>, CorpusError> {
+    let mut out = Vec::new();
+    absorb_payload(&mut out, signal)?;
+    Ok(out)
+}
+
+/// SHA-256 over one decoded channel-major `i64` signal (§8.2.1):
+/// `"OpenECS-payload\0"`, `u8 element_type = 1`, `u8 byte_order = 0`,
+/// `u8 layout = 0`, `u32le n_chan`, `u64le n_samples`, then every sample as
+/// `i64le`, channel by channel. Refuses a ragged signal.
+pub fn payload_digest(signal: &[Vec<i64>]) -> Result<Digest32, CorpusError> {
+    let mut hasher = Sha256::new();
+    absorb_payload(&mut hasher, signal)?;
+    Ok(hasher.finalize().into())
+}
+
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let r = a % b;
+        a = b;
+        b = r;
+    }
+    a
+}
+
+/// The exact value of a finite positive `f64` as a rational in lowest terms
+/// (§8.2.3). Every finite double is a dyadic rational, so this is exact; it
+/// fails only when the pair does not fit `u64`.
+pub fn exact_rational(value: f64) -> Result<(u64, u64), CorpusError> {
     if !value.is_finite() || value <= 0.0 {
         return Err(CorpusError::Semantic(format!(
             "sample rate must be finite and positive, got {value}"
@@ -156,228 +282,268 @@ fn exact_positive_f64(value: f64) -> Result<Rational, CorpusError> {
     let bits = value.to_bits();
     let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
     let fraction = bits & ((1_u64 << 52) - 1);
-    let (mantissa, exponent) = if exponent_bits == 0 {
+    let (mut mantissa, mut exponent) = if exponent_bits == 0 {
         (fraction, -1022 - 52)
     } else {
         (fraction | (1_u64 << 52), exponent_bits - 1023 - 52)
     };
-    let mut numerator = i128::from(mantissa);
-    let mut denominator = 1_i128;
+    // Lowest terms: strip the factors of two the exponent can absorb.
+    while exponent < 0 && mantissa & 1 == 0 {
+        mantissa >>= 1;
+        exponent += 1;
+    }
     if exponent >= 0 {
-        let factor = 1_i128.checked_shl(exponent as u32).ok_or_else(|| {
-            CorpusError::Semantic("sample-rate numerator exceeds i128".to_string())
-        })?;
-        numerator = numerator.checked_mul(factor).ok_or_else(|| {
-            CorpusError::Semantic("sample-rate numerator exceeds i128".to_string())
-        })?;
+        let numerator = mantissa
+            .checked_shl(exponent as u32)
+            .filter(|_| exponent < 64)
+            .ok_or_else(|| {
+                CorpusError::Semantic(format!("sample rate {value} numerator exceeds u64"))
+            })?;
+        Ok((numerator, 1))
     } else {
-        denominator = denominator.checked_shl((-exponent) as u32).ok_or_else(|| {
-            CorpusError::Semantic("sample-rate denominator exceeds i128".to_string())
-        })?;
-    }
-    Rational::new(numerator, denominator)
-        .map_err(|error| CorpusError::Semantic(format!("invalid sample-rate rational: {error}")))
-}
-
-/// Hash one decoded channel-major i64 signal using ABIR payload semantics.
-pub fn decoded_signal_content_id(signal: &[Vec<i64>]) -> ContentId {
-    let mut hasher = PayloadContentHasher::new(ElementType::I64);
-    for channel in signal {
-        for sample in channel {
-            hasher.update(&sample.to_le_bytes());
-        }
-    }
-    hasher.finalize()
-}
-
-/// Derive path-root-invariant ABIR identity of decoded corpus meaning.
-///
-/// File SHA-256 values remain separate byte-integrity observations. This
-/// projection seals sorted relative source keys, exact rates, shapes, and i64
-/// sample payloads into a validated ABIR dataset.
-pub fn semantic_content_id(
-    manifest: &CorpusManifest,
-    loaded: &[(Vec<Vec<i64>>, f64)],
-) -> Result<String, CorpusError> {
-    if manifest.file.len() != loaded.len() {
-        return Err(CorpusError::Semantic(format!(
-            "manifest has {} files but decoded corpus has {}",
-            manifest.file.len(),
-            loaded.len()
-        )));
-    }
-    let mut payload_ids = Vec::with_capacity(loaded.len());
-    for (entry, (channels, decoded_rate)) in manifest.file.iter().zip(loaded) {
-        let n_samples = channels.first().map(Vec::len).unwrap_or(0);
-        if channels.len() != entry.n_chan
-            || n_samples != entry.n_samples
-            || n_samples == 0
-            || channels.iter().any(|item| item.len() != n_samples)
-            || (decoded_rate - entry.fs).abs() > 1e-6
-        {
+        let shift = (-exponent) as u32;
+        if shift >= 64 {
             return Err(CorpusError::Semantic(format!(
-                "decoded shape or rate for {:?} differs from manifest",
-                entry.path
+                "sample rate {value} denominator exceeds u64"
             )));
         }
-        payload_ids.push(decoded_signal_content_id(channels));
+        Ok((mantissa, 1_u64 << shift))
     }
-    semantic_content_id_from_payloads(manifest, &payload_ids)
 }
 
-/// Derive corpus semantic identity from precomputed decoded payload identities.
-///
-/// This bounded-memory form powers manifest emission and parallel grading.
-pub fn semantic_content_id_from_payloads(
+impl CorpusFileEntry {
+    /// The exact sample rate `(fs_num, fs_den)` this entry contributes to
+    /// the content identity (§8.2.3): the declared pair when present (which
+    /// must be positive, in lowest terms, and agree with `fs`), otherwise
+    /// the exact rational of `fs`.
+    pub fn sample_rate_rational(&self) -> Result<(u64, u64), CorpusError> {
+        match (self.fs_num, self.fs_den) {
+            (None, None) => exact_rational(self.fs),
+            (Some(num), Some(den)) => {
+                if num == 0 || den == 0 {
+                    return Err(CorpusError::Semantic(format!(
+                        "{:?}: fs_num/fs_den must both be positive, got {num}/{den}",
+                        self.path
+                    )));
+                }
+                if gcd(num, den) != 1 {
+                    return Err(CorpusError::Semantic(format!(
+                        "{:?}: fs_num/fs_den must be in lowest terms, got {num}/{den}",
+                        self.path
+                    )));
+                }
+                let as_f64 = num as f64 / den as f64;
+                if !self.fs.is_finite() || (as_f64 - self.fs).abs() > 1e-6 {
+                    return Err(CorpusError::Semantic(format!(
+                        "{:?}: fs_num/fs_den = {num}/{den} disagrees with fs = {}",
+                        self.path, self.fs
+                    )));
+                }
+                Ok((num, den))
+            }
+            _ => Err(CorpusError::Semantic(format!(
+                "{:?}: fs_num and fs_den must be declared together",
+                self.path
+            ))),
+        }
+    }
+}
+
+fn absorb_content(
+    sink: &mut impl Absorb,
     manifest: &CorpusManifest,
-    payload_ids: &[ContentId],
-) -> Result<String, CorpusError> {
-    if manifest.file.len() != payload_ids.len() {
+    payload_digests: &[Digest32],
+) -> Result<(), CorpusError> {
+    if manifest.file.len() != payload_digests.len() {
         return Err(CorpusError::Semantic(format!(
-            "manifest has {} files but identity projection has {} payloads",
+            "manifest has {} files but {} payload digests were supplied",
             manifest.file.len(),
-            payload_ids.len()
+            payload_digests.len()
         )));
     }
-    let mut entries: Vec<_> = manifest.file.iter().zip(payload_ids).collect();
-    entries.sort_by(|(left, _), (right, _)| left.path.cmp(&right.path));
+    let file_count = u32::try_from(manifest.file.len())
+        .map_err(|_| CorpusError::Semantic("file count exceeds u32".to_string()))?;
+    let mut entries: Vec<(&CorpusFileEntry, &Digest32)> =
+        manifest.file.iter().zip(payload_digests).collect();
+    // Byte-wise on the path: `str` ordering is byte-wise lexicographic.
+    entries.sort_by(|(left, _), (right, _)| left.path.as_bytes().cmp(right.path.as_bytes()));
+    if let Some(pair) = entries.windows(2).find(|w| w[0].0.path == w[1].0.path) {
+        return Err(CorpusError::Semantic(format!(
+            "path {:?} is pinned twice",
+            pair[0].0.path
+        )));
+    }
 
-    let mut draft = DatasetDraft::new(ObjectId::<DatasetTag>::from_bytes([0xEC; 16]));
-    let modality = ConceptId::new("abir:modality/eeg")
-        .map_err(|error| CorpusError::Semantic(error.to_string()))?;
-    for (index, (entry, payload_id)) in entries.into_iter().enumerate() {
-        let n_channels = u64::try_from(entry.n_chan)
-            .map_err(|_| CorpusError::Semantic("channel count exceeds u64".to_string()))?;
-        if n_channels == 0 || entry.n_samples == 0 {
+    sink.absorb(CONTENT_DOMAIN);
+    sink.absorb(&CONTENT_IDENTITY_VERSION.to_le_bytes());
+    absorb_lp(sink, "corpus name", &manifest.name)?;
+    absorb_lp(sink, "corpus version", &manifest.version)?;
+    sink.absorb(&file_count.to_le_bytes());
+    for (entry, digest) in entries {
+        if entry.n_chan == 0 || entry.n_samples == 0 {
             return Err(CorpusError::Semantic(format!(
                 "{:?} has an empty declared shape",
                 entry.path
             )));
         }
-        let n_samples_u64 = u64::try_from(entry.n_samples)
+        let n_chan = u32::try_from(entry.n_chan)
+            .map_err(|_| CorpusError::Semantic("channel count exceeds u32".to_string()))?;
+        let n_samples = u64::try_from(entry.n_samples)
             .map_err(|_| CorpusError::Semantic("sample count exceeds u64".to_string()))?;
-        let logical_bytes = n_channels
-            .checked_mul(n_samples_u64)
-            .and_then(|value| value.checked_mul(8))
-            .ok_or_else(|| CorpusError::Semantic("payload byte count overflow".to_string()))?;
-        let atom_id = indexed_id::<AtomTag>(ATOM_ID_NAMESPACE, index)?;
-        let stream_id = indexed_id::<StreamTag>(STREAM_ID_NAMESPACE, index)?;
-        let recording_id = indexed_id::<RecordingTag>(RECORDING_ID_NAMESPACE, index)?;
-        let payload = PayloadDescriptor::new(
-            *payload_id,
-            logical_bytes,
-            ElementType::I64,
-            ByteOrder::Little,
-            vec![n_channels, n_samples_u64],
-            Layout::DenseRowMajor,
-            None,
-            None,
-        );
-        let segment = TimeSegment::new(
-            Rational::new(0, 1).expect("zero rational"),
-            exact_positive_f64(entry.fs)?,
-            n_samples_u64,
-        )
-        .map_err(|error| CorpusError::Semantic(error.to_string()))?;
-        draft.add_atom(Atom::SignalBlock(SignalBlock::new(
-            atom_id,
-            Presence::Present,
-            Some(payload),
-            TimeAxis::Regular(segment),
-            None,
-        )));
-        draft.add_stream(Stream::new(
-            stream_id,
-            recording_id,
-            modality.clone(),
-            vec![atom_id],
-            None,
-            None,
-            None,
-        ));
-        let mut recording = Recording::new(recording_id, vec![stream_id]);
-        recording.add_source_key(
-            SourceKey::new("openecs.corpus.path", &entry.path)
-                .map_err(|error| CorpusError::Semantic(format!("invalid source key: {error}")))?,
-        );
-        draft.add_recording(recording);
-    }
-
-    let dataset = draft
-        .validate(ValidationLimits::default())
-        .map_err(|report| {
-            CorpusError::Semantic(format!("ABIR dataset validation failed: {report:?}"))
-        })?;
-    logical_content_id(&dataset)
-        .map(|content_id| content_id.to_string())
-        .map_err(|error| CorpusError::Semantic(format!("canonicalization failed: {error}")))
-}
-
-fn declared_content_id(manifest: &CorpusManifest) -> Result<Option<&str>, CorpusError> {
-    let Some(identity) = &manifest.abir_identity else {
-        return Ok(None);
-    };
-    if identity.schema != ABIR_IDENTITY_SCHEMA {
-        return Err(CorpusError::Semantic(format!(
-            "projection schema {:?} is unsupported",
-            identity.schema
-        )));
-    }
-    if identity.content_id.len() != 64
-        || !identity
-            .content_id
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err(CorpusError::Semantic(
-            "declared ContentId must be 64 lowercase hexadecimal digits".to_string(),
-        ));
-    }
-    Ok(Some(&identity.content_id))
-}
-
-fn verify_observed_content_id(
-    manifest: &CorpusManifest,
-    observed: &str,
-) -> Result<(), CorpusError> {
-    let Some(expected) = declared_content_id(manifest)? else {
-        return Ok(());
-    };
-    if observed != expected {
-        return Err(CorpusError::Semantic(format!(
-            "ContentId mismatch: expected {expected}, got {observed}"
-        )));
+        let (fs_num, fs_den) = entry.sample_rate_rational()?;
+        absorb_lp(sink, "file path", &entry.path)?;
+        sink.absorb(&n_chan.to_le_bytes());
+        sink.absorb(&n_samples.to_le_bytes());
+        sink.absorb(&fs_num.to_le_bytes());
+        sink.absorb(&fs_den.to_le_bytes());
+        sink.absorb(digest);
     }
     Ok(())
 }
 
-fn verify_semantic_identity(
+/// The exact pre-image of [`content_digest`] (§8.2.2), for known-answer
+/// checks. `payload_digests` are in manifest order.
+pub fn content_preimage(
     manifest: &CorpusManifest,
-    loaded: &[(Vec<Vec<i64>>, f64)],
-) -> Result<(), CorpusError> {
-    if declared_content_id(manifest)?.is_none() {
-        return Ok(());
-    }
-    let observed = semantic_content_id(manifest, loaded)?;
-    verify_observed_content_id(manifest, &observed)
+    payload_digests: &[Digest32],
+) -> Result<Vec<u8>, CorpusError> {
+    let mut out = Vec::new();
+    absorb_content(&mut out, manifest, payload_digests)?;
+    Ok(out)
 }
 
-impl std::error::Error for CorpusError {}
+/// SHA-256 corpus content identity (§8.2.2): `"OpenECS-corpus-identity\0"`,
+/// `u32le version = 1`, `lp(name)`, `lp(version)`, `u32le file_count`, then
+/// per file **sorted byte-wise on path**: `lp(path)`, `u32le n_chan`,
+/// `u64le n_samples`, `u64le fs_num`, `u64le fs_den`, the 32-byte
+/// [`payload_digest`]. `payload_digests` are in manifest order. No float is
+/// hashed; the shape comes from the manifest, which the loader has already
+/// proven equal to the decoded shape.
+pub fn content_digest(
+    manifest: &CorpusManifest,
+    payload_digests: &[Digest32],
+) -> Result<Digest32, CorpusError> {
+    let mut hasher = Sha256::new();
+    absorb_content(&mut hasher, manifest, payload_digests)?;
+    Ok(hasher.finalize().into())
+}
 
-/// Lowercase-hex SHA-256 of a byte buffer.
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut s = String::with_capacity(64);
-    for b in digest {
+/// Lowercase-hex rendering of a digest.
+pub fn hex_lower(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
         s.push_str(&format!("{b:02x}"));
     }
     s
 }
 
+impl ContentIdentity {
+    /// Compute the `[content_identity]` block for a manifest from its
+    /// decoded payload digests (manifest order).
+    pub fn compute(
+        manifest: &CorpusManifest,
+        payload_digests: &[Digest32],
+    ) -> Result<Self, CorpusError> {
+        Ok(Self {
+            version: CONTENT_IDENTITY_VERSION,
+            digest: hex_lower(&content_digest(manifest, payload_digests)?),
+        })
+    }
+}
+
+impl CorpusManifest {
+    /// Compute the content identity of a corpus already decoded by
+    /// [`verify_and_load`] (same order as `self.file`).
+    pub fn content_identity_of(
+        &self,
+        loaded: &[(Vec<Vec<i64>>, f64)],
+    ) -> Result<ContentIdentity, CorpusError> {
+        let payload_digests = loaded
+            .iter()
+            .map(|(channels, _)| payload_digest(channels))
+            .collect::<Result<Vec<_>, _>>()?;
+        ContentIdentity::compute(self, &payload_digests)
+    }
+
+    /// Warnings a reader should surface about blocks this grader accepts
+    /// but does not verify. Never an error: a 1.0 manifest still grades.
+    pub fn legacy_warnings(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if self.abir_identity.is_some() {
+            out.push(
+                "manifest carries a legacy [abir_identity] block (OpenECS 1.0 ABIR projection); \
+                 OpenECS 1.1 does not verify it and will not write it back. Re-emit with \
+                 `openecs emit-corpus-manifest` to pin a [content_identity]."
+                    .to_string(),
+            );
+            if self.content_identity.is_none() {
+                out.push(
+                    "no [content_identity] is declared: the decoded content of this corpus is \
+                     not pinned, only its file bytes."
+                        .to_string(),
+                );
+            }
+        }
+        out
+    }
+}
+
+/// The declared digest, validated for shape, if a `[content_identity]` block
+/// is present.
+fn declared_content_digest(manifest: &CorpusManifest) -> Result<Option<&str>, CorpusError> {
+    let Some(identity) = &manifest.content_identity else {
+        return Ok(None);
+    };
+    if identity.version != CONTENT_IDENTITY_VERSION {
+        return Err(CorpusError::Semantic(format!(
+            "content_identity version {} is not implemented by this grader (implements {})",
+            identity.version, CONTENT_IDENTITY_VERSION
+        )));
+    }
+    if identity.digest.len() != 64
+        || !identity
+            .digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(CorpusError::Semantic(
+            "declared content_identity.digest must be 64 lowercase hexadecimal digits".to_string(),
+        ));
+    }
+    Ok(Some(&identity.digest))
+}
+
+fn verify_declared_content_identity(
+    manifest: &CorpusManifest,
+    payload_digests: &[Digest32],
+) -> Result<(), CorpusError> {
+    let Some(expected) = declared_content_digest(manifest)? else {
+        return Ok(());
+    };
+    let observed = hex_lower(&content_digest(manifest, payload_digests)?);
+    if observed != expected {
+        return Err(CorpusError::Semantic(format!(
+            "content digest mismatch: manifest declares {expected}, decoded corpus is {observed}"
+        )));
+    }
+    Ok(())
+}
+
+// ──────────────────────────────── loading ───────────────────────────────────
+
+/// Lowercase-hex SHA-256 of a byte buffer.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    hex_lower(&Sha256::digest(bytes))
+}
+
 /// Load and validate a corpus manifest from a TOML file.
 ///
 /// Refuses (with [`CorpusError::UnsupportedVersion`]) a manifest whose spec
-/// **major** differs from this grader's (spec §11).
+/// **major** differs from this grader's (spec §11). A `[content_identity]`
+/// block, if present, is checked for shape here and verified against the
+/// decoded corpus by [`verify_and_load`] / [`grade_manifest_parallel`]. A
+/// legacy `[abir_identity]` block is accepted and reported through
+/// [`CorpusManifest::legacy_warnings`], never refused.
 pub fn load_corpus_manifest<P: AsRef<Path>>(path: P) -> Result<CorpusManifest, CorpusError> {
     let p = path.as_ref();
     let text =
@@ -385,9 +551,11 @@ pub fn load_corpus_manifest<P: AsRef<Path>>(path: P) -> Result<CorpusManifest, C
     let manifest: CorpusManifest = toml::from_str(&text).map_err(CorpusError::Parse)?;
     // Accept this major or older; refuse a newer major (see manifest loader).
     match crate::spec_major(&manifest.spec_version) {
-        Some(m) if m <= crate::SPEC_MAJOR => Ok(manifest),
-        _ => Err(CorpusError::UnsupportedVersion(manifest.spec_version)),
+        Some(m) if m <= crate::SPEC_MAJOR => {}
+        _ => return Err(CorpusError::UnsupportedVersion(manifest.spec_version)),
     }
+    declared_content_digest(&manifest)?;
+    Ok(manifest)
 }
 
 /// Verify every file's SHA-256 and shape, then load the corpus.
@@ -397,13 +565,16 @@ pub fn load_corpus_manifest<P: AsRef<Path>>(path: P) -> Result<CorpusManifest, C
 /// `(per-channel signal, fs)` corpus ready for
 /// [`crate::harness::run_corpus`]. The first integrity / shape / read
 /// failure aborts with a precise [`CorpusError`]; a corpus is only graded
-/// once every file is proven bit-identical to its pin.
+/// once every file is proven bit-identical to its pin. When the manifest
+/// declares a `[content_identity]`, the decoded corpus must reproduce it.
 pub fn verify_and_load<P: AsRef<Path>>(
     manifest: &CorpusManifest,
     base_dir: P,
 ) -> Result<LoadedCorpus, CorpusError> {
     let base = base_dir.as_ref();
+    let verify_identity = declared_content_digest(manifest)?.is_some();
     let mut out = Vec::with_capacity(manifest.file.len());
+    let mut payload_digests = Vec::with_capacity(manifest.file.len());
 
     for entry in &manifest.file {
         let full: PathBuf = base.join(&entry.path);
@@ -423,10 +594,15 @@ pub fn verify_and_load<P: AsRef<Path>>(
         //    must match the manifest.
         let signal = edf::read_edf(&full).map_err(|e| CorpusError::Edf(entry.path.clone(), e))?;
         check_shape(entry, &signal)?;
+        if verify_identity {
+            payload_digests.push(payload_digest(&signal.channels)?);
+        }
         out.push((signal.channels, signal.fs));
     }
 
-    verify_semantic_identity(manifest, &out)?;
+    if verify_identity {
+        verify_declared_content_identity(manifest, &payload_digests)?;
+    }
     Ok(out)
 }
 
@@ -478,7 +654,8 @@ fn check_shape(entry: &CorpusFileEntry, signal: &EdfSignal) -> Result<(), Corpus
 /// [`CorpusError`] (which file races to surface first is unspecified, but a
 /// failure always aborts). Per-file *grades and metrics* match the sequential
 /// path exactly; only `throughput_mibs` differs (it is a wall-clock
-/// measurement).
+/// measurement). A declared `[content_identity]` is verified from the
+/// per-file payload digests once every file has been graded.
 pub fn grade_manifest_parallel<F>(
     manifest: &CorpusManifest,
     base_dir: impl AsRef<Path>,
@@ -490,10 +667,10 @@ where
     F: Fn() + Sync,
 {
     let base = base_dir.as_ref();
-    let verify_abir_identity = declared_content_id(manifest)?.is_some();
+    let verify_identity = declared_content_digest(manifest)?.is_some();
     let indexed: Vec<(usize, &CorpusFileEntry)> = manifest.file.iter().enumerate().collect();
 
-    let mut graded: Vec<(usize, EcsReport, u64, u64, Option<ContentId>)> = indexed
+    let mut graded: Vec<(usize, EcsReport, u64, u64, Option<Digest32>)> = indexed
         .par_iter()
         .map(|(idx, entry)| -> Result<_, CorpusError> {
             let full = base.join(&entry.path);
@@ -513,8 +690,11 @@ where
             let signal =
                 edf::read_edf(&full).map_err(|e| CorpusError::Edf(entry.path.clone(), e))?;
             check_shape(entry, &signal)?;
-            let payload_id =
-                verify_abir_identity.then(|| decoded_signal_content_id(&signal.channels));
+            let digest = if verify_identity {
+                Some(payload_digest(&signal.channels)?)
+            } else {
+                None
+            };
             let raw = serialize(&signal.channels).len() as u64;
             let mut rep = harness::run_measured(codec, &signal.channels, signal.fs, repeats);
             rep.dataset = manifest.name.clone();
@@ -525,25 +705,24 @@ where
             };
 
             progress();
-            Ok((*idx, rep, raw, comp, payload_id))
+            Ok((*idx, rep, raw, comp, digest))
         })
         .collect::<Result<Vec<_>, CorpusError>>()?;
 
     // Restore manifest order for deterministic reporting.
     graded.sort_by_key(|(idx, _, _, _, _)| *idx);
-    if verify_abir_identity {
-        let payload_ids: Vec<_> = graded
+    if verify_identity {
+        let payload_digests: Vec<Digest32> = graded
             .iter()
-            .map(|(_, _, _, _, payload_id)| {
-                payload_id.as_ref().copied().ok_or_else(|| {
+            .map(|(_, _, _, _, digest)| {
+                digest.ok_or_else(|| {
                     CorpusError::Semantic(
-                        "parallel grader omitted a requested payload identity".to_string(),
+                        "parallel grader omitted a requested payload digest".to_string(),
                     )
                 })
             })
             .collect::<Result<_, _>>()?;
-        let observed = semantic_content_id_from_payloads(manifest, &payload_ids)?;
-        verify_observed_content_id(manifest, &observed)?;
+        verify_declared_content_identity(manifest, &payload_digests)?;
     }
     let per_file: Vec<(EcsReport, u64, u64)> = graded
         .into_iter()
@@ -557,6 +736,29 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn entry(path: &str, fs: f64, n_chan: usize, n_samples: usize) -> CorpusFileEntry {
+        CorpusFileEntry {
+            path: path.to_string(),
+            sha256: "1".repeat(64),
+            fs,
+            fs_num: None,
+            fs_den: None,
+            n_chan,
+            n_samples,
+        }
+    }
+
+    fn manifest(name: &str, file: Vec<CorpusFileEntry>) -> CorpusManifest {
+        CorpusManifest {
+            spec_version: crate::SPEC_VERSION.to_string(),
+            name: name.to_string(),
+            version: "1".to_string(),
+            content_identity: None,
+            abir_identity: None,
+            file,
+        }
+    }
 
     #[test]
     fn sha256_matches_known_vector() {
@@ -589,48 +791,213 @@ mod tests {
         assert_eq!(m.version, "1.0.0");
         assert_eq!(m.file.len(), 1);
         assert_eq!(m.file[0].n_chan, 4);
+        assert!(m.content_identity.is_none());
+        assert!(m.abir_identity.is_none());
+        assert!(m.legacy_warnings().is_empty());
     }
 
     #[test]
-    fn semantic_content_id_is_manifest_order_and_root_invariant() {
-        let first_entry = CorpusFileEntry {
-            path: "a.edf".to_string(),
-            sha256: "1".repeat(64),
-            fs: 256.0,
-            n_chan: 1,
-            n_samples: 3,
-        };
-        let second_entry = CorpusFileEntry {
-            path: "nested/b.edf".to_string(),
-            sha256: "2".repeat(64),
-            fs: 128.0,
-            n_chan: 1,
-            n_samples: 2,
-        };
+    fn legacy_abir_identity_block_is_read_warned_and_never_written() {
+        let src = r#"
+            spec_version = "1.0"
+            name = "ecs-smoke"
+            version = "1.0.0"
+
+            [abir_identity]
+            schema = "org.quitetall.openecs.corpus-identity-projection-v1"
+            content_id = "0d074e9141e35d42b37c1e7f706ee03f39f88e1bd6ab89304cd9d2864ac72d49"
+
+            [[file]]
+            path = "smoke/a.edf"
+            sha256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            fs = 256.0
+            n_chan = 4
+            n_samples = 1024
+        "#;
+        let m: CorpusManifest = toml::from_str(src).expect("a 1.0 manifest still parses");
+        let legacy = m.abir_identity.as_ref().expect("block is read");
+        assert_eq!(legacy.content_id.len(), 64);
+        let warnings = m.legacy_warnings();
+        assert_eq!(warnings.len(), 2, "legacy block + no content identity");
+        assert!(warnings[0].contains("[abir_identity]"));
+        let back = toml::to_string(&m).expect("serializes");
+        assert!(
+            !back.contains("abir_identity"),
+            "the legacy block is deserialize-only"
+        );
+    }
+
+    #[test]
+    fn payload_preimage_is_the_documented_byte_string() {
+        let signal = vec![vec![1_i64, -1], vec![i64::MIN, i64::MAX]];
+        let preimage = payload_preimage(&signal).expect("dense signal");
+        let mut expected = Vec::new();
+        expected.extend_from_slice(b"OpenECS-payload\0");
+        expected.extend_from_slice(&[1, 0, 0]);
+        expected.extend_from_slice(&2_u32.to_le_bytes());
+        expected.extend_from_slice(&2_u64.to_le_bytes());
+        for sample in [1_i64, -1, i64::MIN, i64::MAX] {
+            expected.extend_from_slice(&sample.to_le_bytes());
+        }
+        assert_eq!(preimage, expected);
+        assert_eq!(
+            payload_digest(&signal).expect("digest"),
+            <[u8; 32]>::from(Sha256::digest(&expected))
+        );
+    }
+
+    #[test]
+    fn payload_digest_refuses_ragged_signals() {
+        let ragged = vec![vec![1_i64, 2, 3], vec![4_i64]];
+        assert!(matches!(
+            payload_digest(&ragged),
+            Err(CorpusError::Semantic(_))
+        ));
+    }
+
+    #[test]
+    fn exact_rational_is_lowest_terms_and_exact() {
+        assert_eq!(exact_rational(256.0).unwrap(), (256, 1));
+        assert_eq!(exact_rational(128.0).unwrap(), (128, 1));
+        assert_eq!(exact_rational(0.5).unwrap(), (1, 2));
+        assert_eq!(exact_rational(250.5).unwrap(), (501, 2));
+        // 0.1 is not a dyadic; its exact double value is.
+        assert_eq!(
+            exact_rational(0.1).unwrap(),
+            (3602879701896397, 36028797018963968)
+        );
+        assert!(exact_rational(0.0).is_err());
+        assert!(exact_rational(-1.0).is_err());
+        assert!(exact_rational(f64::NAN).is_err());
+        assert!(exact_rational(f64::INFINITY).is_err());
+        // Too small to fit a u64 denominator.
+        assert!(exact_rational(f64::MIN_POSITIVE).is_err());
+    }
+
+    #[test]
+    fn declared_rational_must_be_reduced_and_agree_with_fs() {
+        let mut e = entry("a.edf", 256.0, 1, 1);
+        e.fs_num = Some(512);
+        e.fs_den = Some(2);
+        assert!(e.sample_rate_rational().is_err(), "not lowest terms");
+        e.fs_num = Some(255);
+        e.fs_den = Some(1);
+        assert!(e.sample_rate_rational().is_err(), "disagrees with fs");
+        e.fs_num = Some(256);
+        e.fs_den = None;
+        assert!(e.sample_rate_rational().is_err(), "half a pair");
+        e.fs_den = Some(1);
+        assert_eq!(e.sample_rate_rational().unwrap(), (256, 1));
+        e.fs_num = None;
+        e.fs_den = None;
+        assert_eq!(e.sample_rate_rational().unwrap(), (256, 1));
+    }
+
+    #[test]
+    fn content_digest_is_manifest_order_and_root_invariant() {
+        let first_entry = entry("a.edf", 256.0, 1, 3);
+        let second_entry = entry("nested/b.edf", 128.0, 1, 2);
         let first_signal = (vec![vec![1_i64, 2, 3]], 256.0);
         let second_signal = (vec![vec![4_i64, 5]], 128.0);
-        let forward = CorpusManifest {
-            spec_version: "1.0".to_string(),
-            name: "first-location".to_string(),
-            version: "1".to_string(),
-            abir_identity: None,
-            file: vec![first_entry.clone(), second_entry.clone()],
-        };
-        let reversed = CorpusManifest {
-            spec_version: "1.0".to_string(),
-            name: "relocated-copy".to_string(),
-            version: "1".to_string(),
-            abir_identity: None,
-            file: vec![second_entry, first_entry],
-        };
+        let forward = manifest(
+            "same-corpus",
+            vec![first_entry.clone(), second_entry.clone()],
+        );
+        let reversed = manifest("same-corpus", vec![second_entry, first_entry]);
 
-        let forward_id =
-            semantic_content_id(&forward, &[first_signal.clone(), second_signal.clone()])
-                .expect("semantic identity");
-        let reversed_id = semantic_content_id(&reversed, &[second_signal, first_signal])
-            .expect("semantic identity");
-
+        let forward_id = forward
+            .content_identity_of(&[first_signal.clone(), second_signal.clone()])
+            .expect("identity");
+        let reversed_id = reversed
+            .content_identity_of(&[second_signal, first_signal])
+            .expect("identity");
         assert_eq!(forward_id, reversed_id);
+        assert_eq!(forward_id.version, CONTENT_IDENTITY_VERSION);
+        assert_eq!(forward_id.digest.len(), 64);
+    }
+
+    #[test]
+    fn content_digest_binds_name_version_path_shape_rate_and_samples() {
+        let base_entry = entry("a.edf", 256.0, 1, 2);
+        let base = manifest("corpus", vec![base_entry.clone()]);
+        let signal = vec![vec![1_i64, 2]];
+        let base_digest = base
+            .content_identity_of(&[(signal.clone(), 256.0)])
+            .unwrap();
+
+        let mut renamed = base.clone();
+        renamed.name = "corpus-2".to_string();
+        assert_ne!(
+            renamed
+                .content_identity_of(&[(signal.clone(), 256.0)])
+                .unwrap(),
+            base_digest
+        );
+
+        let mut reversioned = base.clone();
+        reversioned.version = "2".to_string();
+        assert_ne!(
+            reversioned
+                .content_identity_of(&[(signal.clone(), 256.0)])
+                .unwrap(),
+            base_digest
+        );
+
+        let mut moved = base.clone();
+        moved.file[0].path = "b.edf".to_string();
+        assert_ne!(
+            moved
+                .content_identity_of(&[(signal.clone(), 256.0)])
+                .unwrap(),
+            base_digest
+        );
+
+        let mut slower = base.clone();
+        slower.file[0].fs = 128.0;
+        assert_ne!(
+            slower
+                .content_identity_of(&[(signal.clone(), 128.0)])
+                .unwrap(),
+            base_digest
+        );
+
+        let mut edited = base.clone();
+        edited.file[0].sha256 = "2".repeat(64);
+        assert_eq!(
+            edited
+                .content_identity_of(&[(signal.clone(), 256.0)])
+                .unwrap(),
+            base_digest,
+            "the byte pin is a separate observation, not part of the content identity"
+        );
+
+        assert_ne!(
+            base.content_identity_of(&[(vec![vec![1_i64, 3]], 256.0)])
+                .unwrap(),
+            base_digest
+        );
+    }
+
+    #[test]
+    fn content_digest_refuses_duplicate_paths_and_empty_shapes() {
+        let dup = manifest(
+            "corpus",
+            vec![entry("a.edf", 256.0, 1, 1), entry("a.edf", 256.0, 1, 1)],
+        );
+        assert!(matches!(
+            content_digest(&dup, &[[0; 32], [0; 32]]),
+            Err(CorpusError::Semantic(_))
+        ));
+        let empty = manifest("corpus", vec![entry("a.edf", 256.0, 0, 1)]);
+        assert!(matches!(
+            content_digest(&empty, &[[0; 32]]),
+            Err(CorpusError::Semantic(_))
+        ));
+        let short = manifest("corpus", vec![entry("a.edf", 256.0, 1, 1)]);
+        assert!(matches!(
+            content_digest(&short, &[]),
+            Err(CorpusError::Semantic(_))
+        ));
     }
 
     #[test]
@@ -647,33 +1014,19 @@ mod tests {
         let bad = "0".repeat(64);
 
         // Wrong hash -> Integrity error.
-        let m_bad = CorpusManifest {
-            spec_version: "1.0".to_string(),
-            name: "t".to_string(),
-            version: "1".to_string(),
-            abir_identity: None,
-            file: vec![CorpusFileEntry {
-                path: "a.edf".to_string(),
-                sha256: bad,
-                fs: 256.0,
-                n_chan: 2,
-                n_samples: 4,
-            }],
-        };
+        let mut bad_entry = entry("a.edf", 256.0, 2, 4);
+        bad_entry.sha256 = bad;
+        let m_bad = manifest("t", vec![bad_entry]);
         match verify_and_load(&m_bad, &dir.path) {
             Err(CorpusError::Integrity { .. }) => {}
             other => panic!("expected Integrity error, got {other:?}"),
         }
 
         // Correct hash + shape -> loads.
+        let mut good_entry = entry("a.edf", 256.0, 2, 4);
+        good_entry.sha256 = good;
         let m_ok = CorpusManifest {
-            file: vec![CorpusFileEntry {
-                path: "a.edf".to_string(),
-                sha256: good,
-                fs: 256.0,
-                n_chan: 2,
-                n_samples: 4,
-            }],
+            file: vec![good_entry],
             ..m_bad
         };
         let loaded = verify_and_load(&m_ok, &dir.path).expect("verifies + loads");
@@ -683,34 +1036,59 @@ mod tests {
     }
 
     #[test]
-    fn semantic_identity_mismatch_is_reported() {
+    fn content_identity_mismatch_is_reported_and_match_is_accepted() {
         let dir = crate::subprocess::ScratchDir::new("corpus_identity").expect("scratch");
         let signal = vec![vec![0_i64, 1, -1, 2]];
         let edf_bytes = crate::subprocess::write_edf_bytes(&signal, 256.0).expect("fixture -> EDF");
         std::fs::write(dir.join("a.edf"), &edf_bytes).expect("write EDF");
-        let manifest = CorpusManifest {
-            spec_version: "1.0".to_string(),
-            name: "identity-test".to_string(),
-            version: "1".to_string(),
-            abir_identity: Some(CorpusAbirIdentity {
-                schema: ABIR_IDENTITY_SCHEMA.to_string(),
-                content_id: "0".repeat(64),
-            }),
-            file: vec![CorpusFileEntry {
-                path: "a.edf".to_string(),
-                sha256: sha256_hex(&edf_bytes),
-                fs: 256.0,
-                n_chan: 1,
-                n_samples: 4,
-            }],
-        };
+        let mut e = entry("a.edf", 256.0, 1, 4);
+        e.sha256 = sha256_hex(&edf_bytes);
+        let mut m = manifest("identity-test", vec![e]);
+        m.content_identity = Some(ContentIdentity {
+            version: CONTENT_IDENTITY_VERSION,
+            digest: "0".repeat(64),
+        });
 
-        match verify_and_load(&manifest, &dir.path) {
+        match verify_and_load(&m, &dir.path) {
             Err(CorpusError::Semantic(detail)) => {
-                assert!(detail.contains("ContentId mismatch"));
+                assert!(detail.contains("content digest mismatch"), "{detail}");
             }
-            other => panic!("expected semantic identity mismatch, got {other:?}"),
+            other => panic!("expected content identity mismatch, got {other:?}"),
         }
+
+        let loaded_without = {
+            let mut plain = m.clone();
+            plain.content_identity = None;
+            verify_and_load(&plain, &dir.path).expect("loads without an identity")
+        };
+        m.content_identity = Some(m.content_identity_of(&loaded_without).expect("identity"));
+        verify_and_load(&m, &dir.path).expect("the true identity verifies");
+
+        // A future identity version is refused, never silently skipped.
+        m.content_identity.as_mut().unwrap().version = 2;
+        assert!(matches!(
+            verify_and_load(&m, &dir.path),
+            Err(CorpusError::Semantic(_))
+        ));
+    }
+
+    #[test]
+    fn legacy_abir_identity_never_fails_verification() {
+        let dir = crate::subprocess::ScratchDir::new("corpus_legacy").expect("scratch");
+        let signal = vec![vec![0_i64, 1, -1, 2]];
+        let edf_bytes = crate::subprocess::write_edf_bytes(&signal, 256.0).expect("fixture -> EDF");
+        std::fs::write(dir.join("a.edf"), &edf_bytes).expect("write EDF");
+        let mut e = entry("a.edf", 256.0, 1, 4);
+        e.sha256 = sha256_hex(&edf_bytes);
+        let mut m = manifest("legacy-test", vec![e]);
+        m.spec_version = "1.0".to_string();
+        m.abir_identity = Some(LegacyAbirIdentity {
+            schema: "org.quitetall.openecs.corpus-identity-projection-v1".to_string(),
+            content_id: "0".repeat(64),
+        });
+        let loaded = verify_and_load(&m, &dir.path).expect("a 1.0 corpus still grades");
+        assert_eq!(loaded.len(), 1);
+        assert!(!m.legacy_warnings().is_empty());
     }
 
     #[test]
@@ -719,19 +1097,9 @@ mod tests {
         let sig = vec![vec![0i64, 1, -1, 2], vec![3, 4, 5, 6]];
         let edf_bytes = crate::subprocess::write_edf_bytes(&sig, 256.0).expect("fixture -> EDF");
         std::fs::write(dir.join("a.edf"), &edf_bytes).expect("write");
-        let m = CorpusManifest {
-            spec_version: "1.0".to_string(),
-            name: "t".to_string(),
-            version: "1".to_string(),
-            abir_identity: None,
-            file: vec![CorpusFileEntry {
-                path: "a.edf".to_string(),
-                sha256: sha256_hex(&edf_bytes),
-                fs: 256.0,
-                n_chan: 3, // wrong: file has 2
-                n_samples: 4,
-            }],
-        };
+        let mut e = entry("a.edf", 256.0, 3, 4); // wrong: file has 2 channels
+        e.sha256 = sha256_hex(&edf_bytes);
+        let m = manifest("t", vec![e]);
         match verify_and_load(&m, &dir.path) {
             Err(CorpusError::Shape { .. }) => {}
             other => panic!("expected Shape error, got {other:?}"),

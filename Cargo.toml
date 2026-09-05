@@ -1,6 +1,6 @@
 [package]
 name = "open-eeg-codec-standard"
-version = "0.9.2"
+version = "1.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -24,7 +24,6 @@ name = "openecs"
 path = "src/bin/openecs.rs"
 
 [dependencies]
-abir = { git = "https://github.com/Quitetall/ABIR.git", rev = "67470c770a1e74d7a6f2a1f6cda96f292f52798e" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # flate2 with default features = pure-Rust miniz_oxide backend (NO system zlib).

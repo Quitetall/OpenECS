@@ -6,7 +6,8 @@
 Vendor-neutral benchmark standard for EEG signal compression. Grades **any codec in any language** against a hash-pinned corpus and produces a single reproducible compliance verdict.
 
 - **Crate:** `open-eeg-codec-standard` · **library:** `open_eeg_codec_standard` · **CLI:** `openecs`
-- **Spec:** [`SPEC/OpenECS-v1.0.md`](SPEC/OpenECS-v1.0.md) (normative) · [`STANDARD.md`](STANDARD.md) (narrative) · JSON schemas in `SPEC/schemas/`
+- **Spec:** [`SPEC/OpenECS-v1.1.md`](SPEC/OpenECS-v1.1.md) (normative; v1.0 kept frozen beside it) · [`STANDARD.md`](STANDARD.md) (narrative) · JSON schemas in `SPEC/schemas/`
+- **No vendor data model:** the corpus identity is SHA-256 over a byte layout the spec fixes (§8.2); the crate has no git dependency
 
 ## Tiers
 
@@ -38,7 +39,7 @@ openecs bench --codec gzip --corpus-manifest corpora/ecs-smoke.toml \
 
 Produces a ranked leaderboard (grade, pooled CR, mean-R 95 % bootstrap CI, paired sign-test p-value vs strongest baseline), terminal ASCII charts, and a self-contained HTML report with inline SVG.
 
-Other subcommands: `grade` (single codec, single signal), `verify-corpus` (SHA-256 + shape + declared ABIR semantic-identity check), `emit-corpus-manifest` (hash a directory of EDFs into a byte- and meaning-pinned manifest).
+Other subcommands: `grade` (single codec, single signal), `verify-corpus` (SHA-256 + shape + declared content-identity check), `emit-corpus-manifest` (hash a directory of EDFs into a manifest pinned by bytes and by decoded content), `levels` (the tier ladder as JSON). A manifest from OpenECS 1.0 still grades; its `[abir_identity]` block is read and warned about, never verified.
 
 ## Codec contract (any language)
 
