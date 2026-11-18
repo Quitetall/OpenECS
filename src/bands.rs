@@ -17,7 +17,7 @@
 //! The DFT is a hand-rolled O(N^2) transform. For the short per-window EEG
 //! segments OpenECS grades this is fast enough and keeps the crate std-only
 //! (no `rustfft` / FFT dependency). If a window length ever makes O(N^2)
-//! the bottleneck, swap [`rfft`]/[`irfft`] for a power-of-two FFT behind
+//! the bottleneck, swap `rfft`/`irfft` for a power-of-two FFT behind
 //! the same signature — the masking logic above stays unchanged.
 
 use std::f64::consts::PI;

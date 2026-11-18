@@ -7,7 +7,7 @@
 //! - [`Store`] — identity/raw passthrough. The CR≈1.0 lossless baseline.
 //! - [`Gzip`]  — pure-Rust miniz_oxide via `flate2` (no system dep), the
 //!   always-available compressed lossless reference.
-//! - [`Zstd`]  — optional, behind `#[cfg(feature = "zstd")]`, so the
+//! - `Zstd`  — optional, behind `#[cfg(feature = "zstd")]`, so the
 //!   default CI build carries no system dependency.
 //!
 //! ## Codec interface
