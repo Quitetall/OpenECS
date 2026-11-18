@@ -5,6 +5,25 @@ independently of the `open-eeg-codec-standard` crate through 0.9.x; from 1.1 the
 crate carries the spec's version line. See [`OpenECS-v1.1.md`](OpenECS-v1.1.md)
 §11 for the version/stability policy.
 
+## 1.1 — 2026-11-18 (crate 1.1.1)
+
+**Spec unchanged; no threshold, metric, manifest or report field changed.** A
+crate-only patch release: `spec_version` stays `"1.1"`, the public Rust API is
+identical to 1.1.0, and the smoke corpus regenerates byte-for-byte.
+
+- **`indicatif` 0.17 → 0.18.** 0.17 depends on the unmaintained `number_prefix`
+  (RUSTSEC-2025-0119); 0.18 replaces it with `unit-prefix`. Used only by the
+  `openecs` CLI progress bar; the call sites compile unchanged.
+- **`console` 0.15 → 0.16**, the line `indicatif` 0.18 uses, so the graph carries
+  one `console`. It never appears in a public signature.
+- **Lockfile refreshed** within the declared ranges (`cargo update`), picking up
+  upstream patch releases.
+- **MSRV stays 1.85**, re-verified: `cargo +1.85.0 test --locked` passes. 1.85 is
+  also the floor the dependencies declare (`clap` 4.6, `indicatif` 0.18.6).
+- **Docs:** `cargo doc` with `-D warnings` is clean (three broken intra-doc links
+  fixed); `SPEC/levels.json` records `crate_version` 1.1.1, its `levels` payload
+  unchanged.
+
 ## 1.1 — 2026-09-05 (crate 1.1.0)
 
 **No threshold changed.** The tier table is byte-for-byte what 1.0 published;

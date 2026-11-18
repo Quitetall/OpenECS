@@ -116,7 +116,7 @@ pub fn sparkline(vals: &[f64]) -> String {
         .collect()
 }
 
-/// A horizontal bar for `frac` ∈ [0,1] of the given character width.
+/// A horizontal bar for `frac` ∈ \[0, 1\] of the given character width.
 pub fn bar(frac: f64, width: usize) -> String {
     let frac = frac.clamp(0.0, 1.0);
     let filled = (frac * width as f64).round() as usize;
